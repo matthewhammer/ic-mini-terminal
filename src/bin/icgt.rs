@@ -5,7 +5,7 @@ extern crate tokio;
 extern crate icgt;
 extern crate delay;
 extern crate ic_agent;
-extern crate serde_idl;
+extern crate candid;
 
 
 // Logging:
@@ -27,7 +27,7 @@ use sdl2::keyboard::Keycode;
 use std::io;
 use std::time::Duration;
 use ic_agent::{Agent, AgentConfig, Blob, CanisterId};
-use serde_idl::value::{IDLArgs, IDLField, IDLValue};
+use candid::IDLArgs;
 
 /// Internet Computer Game Terminal (icgt)
 #[derive(StructOpt, Debug, Clone)]
@@ -262,7 +262,7 @@ pub fn do_canister_tick(cfg: &ConnectConfig) -> Result<render::Result, String> {
     let elapsed = timestamp.elapsed().unwrap();
     if let Ok(blob_res) = blob_res {
         let result =
-            serde_idl::IDLArgs::from_bytes(&(*blob_res.unwrap().0));
+            candid::IDLArgs::from_bytes(&(*blob_res.unwrap().0));
         let idl_rets = result.unwrap().args;
         //let render_out = candid::find_render_out(&idl_rets);
         //repl.update_display(&render_out);

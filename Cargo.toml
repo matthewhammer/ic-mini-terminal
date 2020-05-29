@@ -16,10 +16,8 @@ hashcons = "0.1"
 sdl2 = "0.32"
 tokio = "0.2.10"
 delay = "0.1.0"
+candid = "0.2.3"
 
-serde-idl = { path = "/Users/matthew/dfn/sdk/src/serde_idl" }
-dfx_derive = { path = "/Users/matthew/dfn/sdk/src/dfx_derive" }
-dfx_info = { path = "/Users/matthew/dfn/sdk/src/dfx_info" }
 ic-agent = { path = "/Users/matthew/dfn/sdk/src/agent/rust" }
 
 [lib]

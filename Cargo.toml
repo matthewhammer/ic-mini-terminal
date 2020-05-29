@@ -1,0 +1,41 @@
+[package]
+name = "icgt"
+version = "0.1.0"
+authors = ["Matthew A Hammer <pubmah@nym.hush.com>"]
+
+[dependencies]
+clap = "2.33"
+structopt = "0.2"
+log = "0.4"
+env_logger = "0.6"
+serde = { version = "1.0", features = ["derive"] }
+serde_bytes = "0.11"
+serde_cbor = "0.9"
+serde_json = "1.0"
+hashcons = "0.1"
+sdl2 = "0.32"
+tokio = "0.2.10"
+delay = "0.1.0"
+
+serde-idl = { path = "/Users/matthew/dfn/sdk/src/serde_idl" }
+dfx_derive = { path = "/Users/matthew/dfn/sdk/src/dfx_derive" }
+dfx_info = { path = "/Users/matthew/dfn/sdk/src/dfx_info" }
+ic-agent = { path = "/Users/matthew/dfn/sdk/src/agent/rust" }
+
+[lib]
+name = "icgt"
+path = "src/lib/mod.rs"
+test = true            # Is tested by default.
+doctest = true         # Documentation examples are tested by default.
+bench = true           # Is benchmarked by default.
+doc = true             # Is documented by default.
+plugin = false         # Used as a compiler plugin (deprecated).
+proc-macro = false     # Set to `true` for a proc-macro library.
+harness = true         # Use libtest harness.
+edition = "2015"       # The edition of the target.
+crate-type = ["lib"]   # The crate types to generate.
+required-features = [] # Features required to build this target (N/A for lib).
+
+[[bin]]
+name = "icgt"
+path = "src/bin/icgt.rs"

@@ -1,29 +1,33 @@
 # IC Game Terminal
 
-Graphics output and keyboard input terminal for the Internet Computer.
+Simple keyboard input and graphical output for the Internet Computer.
 
 For playing games, viewing graphics and more.
 
 
 ## Building and testing
 
+### Prerequisites
 
-### Use `dfx` and `vessel` to build and run the test canister
+ * `dfx` via the [DFINITY SDK](https://sdk.dfinity.org/docs/quickstart/quickstart.html)
+ * [`vessel` package manager](https://github.com/kritzcreek/vessel) for Motoko.
 
-In one terminal:
+### Run the test canister within the replica 
 
+Use `dfx` and `vessel` to build and run the test canister.
+
+ * First, in one terminal:  
 ```
 dfx start
 ```
 
-In another terminal:
-
+ * Then, in another terminal:  
 ```
 dfx build
 dfx canister install --all
 ```
 
-Use the canister ID printed back on the terminal to connect `icgt`
+ * Last, use the canister ID printed back on the terminal to connect `icgt`
 
 
 ### Use `cargo` to build and run the `icgt` tool

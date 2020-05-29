@@ -33,7 +33,7 @@ dfx canister install --all
 ### Use `cargo` to build and run the `icgt` tool
 
 ```
-cargo run -- connect ic:06AB8F2EB9EB6699D6
+cargo run -- connect 127.0.0.1:8000 ic:06AB8F2EB9EB6699D6
 ```
 
 

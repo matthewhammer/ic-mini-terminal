@@ -30,7 +30,12 @@ dfx canister install --all
  * Last, use the canister ID printed back on the terminal to connect `icgt`
 
 
-### Use `cargo` to build and run the `icgt` tool
+### Run the tool
+
+Use `cargo` to build and run the `icgt` tool.
+
+The `connect` subcommand sends `tick` update messages to a canister
+hosted on the replica:
 
 ```
 cargo run -- connect 127.0.0.1:8000 ic:06AB8F2EB9EB6699D6

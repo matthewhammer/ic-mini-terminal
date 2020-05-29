@@ -1,8 +1,12 @@
 extern crate hashcons;
 extern crate sdl2;
 extern crate serde;
-
+extern crate tokio;
 extern crate icgt;
+extern crate delay;
+extern crate ic_agent;
+extern crate serde_idl;
+
 
 // Logging:
 #[macro_use]
@@ -16,15 +20,19 @@ use clap::Shell;
 extern crate structopt;
 use structopt::StructOpt;
 
+use delay::Delay;
 use sdl2::event::Event as SysEvent;
 use sdl2::event::WindowEvent;
 use sdl2::keyboard::Keycode;
 use std::io;
+use std::time::Duration;
+use ic_agent::{Agent, AgentConfig, Blob, CanisterId};
+use serde_idl::value::{IDLArgs, IDLField, IDLValue};
 
 /// Internet Computer Game Terminal (icgt)
-#[derive(StructOpt, Debug)]
+#[derive(StructOpt, Debug, Clone)]
 #[structopt(name = "icgt", raw(setting = "clap::AppSettings::DeriveDisplayOrder"))]
-struct CliOpt {
+pub struct CliOpt {
     /// Enable tracing -- the most verbose log.
     #[structopt(short = "t", long = "trace-log")]
     log_trace: bool,
@@ -38,7 +46,15 @@ struct CliOpt {
     command: CliCommand,
 }
 
-#[derive(StructOpt, Debug)]
+/// Connection configuration
+#[derive(Debug, Clone)]
+pub struct ConnectConfig {
+    cli_opt: CliOpt,
+    canister_id: String,
+    replica_url: String,
+}
+
+#[derive(StructOpt, Debug, Clone)]
 enum CliCommand {
     #[structopt(
         name = "completions",
@@ -49,7 +65,10 @@ enum CliCommand {
         name = "connect",
         about = "Connect to a canister as an IC game server."
     )]
-    Connect { canister_id: String },
+    Connect {
+        replica_url: String,
+        canister_id: String
+    },
 }
 
 fn init_log(level_filter: log::LevelFilter) {
@@ -63,6 +82,16 @@ fn init_log(level_filter: log::LevelFilter) {
 
 use icgt::types::{event, render::{self, Fill, Elm}};
 use sdl2::render::{Canvas, RenderTarget};
+
+const RETRY_PAUSE: Duration = Duration::from_millis(100);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+
+pub fn agent(url: &str) -> Result<Agent, ic_agent::AgentError> {
+    Agent::new(AgentConfig {
+        url: format!("http://{}", url).as_str(),
+        ..AgentConfig::default()
+    })
+}
 
 pub fn draw_elms<T: RenderTarget>(
     canvas: &mut Canvas<T>,
@@ -198,7 +227,62 @@ pub fn redraw<T: RenderTarget>(
     Ok(())
 }
 
-pub fn do_event_loop() -> Result<(), String> {
+pub fn do_canister_tick(cfg: &ConnectConfig) -> Result<render::Result, String> {
+    use ic_agent::{Blob, CanisterId};
+    use std::time::Duration;
+    use tokio::runtime::Runtime;
+    let args_str = "()";
+    let args = {
+        if let Ok(args) = &args_str.parse::<IDLArgs>() {
+            args.clone()
+        } else {
+            return Err(format!("do_canister_tick() failed to parse args: {:?}", args_str))
+        }
+    };
+    info!(
+        "...to canister_id {:?} at replica_url {:?}",
+        cfg.canister_id,
+        cfg.replica_url
+    );
+    let mut runtime = Runtime::new().expect("Unable to create a runtime");
+    let delay = Delay::builder()
+        .throttle(RETRY_PAUSE)
+        .timeout(REQUEST_TIMEOUT)
+        .build();
+    let agent = agent(&cfg.replica_url).unwrap();
+    let canister_id =
+        CanisterId::from_text(cfg.canister_id.clone()).unwrap();
+    let timestamp = std::time::SystemTime::now();
+    let blob_res = runtime.block_on(agent.call_and_wait(
+        &canister_id,
+        &"tick",
+        &Blob(args.to_bytes().unwrap()),
+        delay,
+    ));
+    let elapsed = timestamp.elapsed().unwrap();
+    if let Ok(blob_res) = blob_res {
+        let result =
+            serde_idl::IDLArgs::from_bytes(&(*blob_res.unwrap().0));
+        let idl_rets = result.unwrap().args;
+        //let render_out = candid::find_render_out(&idl_rets);
+        //repl.update_display(&render_out);
+        let res = format!("{:?}", &idl_rets);
+        let mut res_log = res.clone();
+        if res_log.len() > 80 {
+            res_log.truncate(80);
+            res_log.push_str("...(truncated)");
+        }
+        info!("..successful result {:?}", res_log);
+        // to do -- decode and draw the result
+        unimplemented!()
+    } else {
+        let res = format!("{:?}", blob_res);
+        info!("..error result {:?}", res);
+        Err(format!("do_canister_tick() failed: {:?}", res))
+    }
+}
+
+pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
     use sdl2::event::EventType;
     let mut dim = render::Dim {
         width: 1000,
@@ -225,6 +309,8 @@ pub fn do_event_loop() -> Result<(), String> {
     info!("Using SDL_Renderer \"{}\"", canvas.info().name);
 
     {
+        do_canister_tick(cfg)?;
+
         // draw initial frame, before waiting for any events
         redraw(&mut canvas, &dim);
     }
@@ -259,28 +345,35 @@ pub fn do_event_loop() -> Result<(), String> {
 }
 
 fn main() {
-    let cliopt = CliOpt::from_args();
+    let cli_opt = CliOpt::from_args();
     init_log(
-        match (cliopt.log_trace, cliopt.log_debug, cliopt.log_quiet) {
+        match (cli_opt.log_trace, cli_opt.log_debug, cli_opt.log_quiet) {
             (true, _, _) => log::LevelFilter::Trace,
             (_, true, _) => log::LevelFilter::Debug,
             (_, _, true) => log::LevelFilter::Error,
             (_, _, _) => log::LevelFilter::Info,
         },
     );
-    info!("Evaluating CLI command: {:?} ...", &cliopt.command);
+    info!("Evaluating CLI command: {:?} ...", &cli_opt.command);
     // - - - - - - - - - - -
-    match cliopt.command {
+    let c = cli_opt.command.clone();
+    match c {
         CliCommand::Completions { shell: s } => {
             // see also: https://clap.rs/effortless-auto-completion/
             //
             CliOpt::clap().gen_completions_to("icgt", s, &mut io::stdout());
             info!("done")
         },
-        CliCommand::Connect { canister_id: i } => {
+        CliCommand::Connect { canister_id, replica_url } => {
             // see also: https://clap.rs/effortless-auto-completion/
             //
-            info!("to do: connect to canister {}", i)
+            let cfg = ConnectConfig{
+                canister_id,
+                replica_url,
+                cli_opt,
+            };
+            info!("Connecting to IC canister: {:?}", cfg);
+            do_event_loop(&cfg).unwrap()
         }
     }
 }

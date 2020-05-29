@@ -103,4 +103,6 @@ pub mod render {
         Draw(Elm),
         Redraw(NamedElms),
     }
+
+    pub type Result = std::result::Result<Out, Out>;
 }

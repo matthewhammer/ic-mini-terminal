@@ -5,8 +5,9 @@ extern crate tokio;
 extern crate icgt;
 extern crate delay;
 extern crate ic_agent;
-extern crate candid;
 
+#[macro_use]
+extern crate candid;
 
 // Logging:
 #[macro_use]
@@ -93,6 +94,48 @@ pub fn agent(url: &str) -> Result<Agent, ic_agent::AgentError> {
     })
 }
 
+fn translate_color(c: &render::Color) -> sdl2::pixels::Color {
+    match c {
+        &render::Color::RGB(r, g, b) => sdl2::pixels::Color::RGB(r as u8, g as u8, b as u8),
+    }
+}
+
+fn translate_rect(pos: &render::Pos, r: &render::Rect) -> sdl2::rect::Rect {
+    // todo -- clip the size of the rect dimension by the bound param
+    sdl2::rect::Rect::new(
+        (pos.x + r.pos.x) as i32,
+        (pos.y + r.pos.y) as i32,
+        r.dim.width as u32,
+        r.dim.height as u32,
+    )
+}
+
+fn draw_rect<T: RenderTarget>(
+    canvas: &mut Canvas<T>,
+    pos: &render::Pos,
+    r: &render::Rect,
+    f: &render::Fill,
+) {
+    match f {
+        Fill::None => {
+            // no-op.
+        }
+        Fill::Closed(c) => {
+            let r = translate_rect(pos, r);
+            let c = translate_color(c);
+            canvas.set_draw_color(c);
+            canvas.fill_rect(r).unwrap();
+        }
+        Fill::Open(c, 1) => {
+            let r = translate_rect(pos, r);
+            let c = translate_color(c);
+            canvas.set_draw_color(c);
+            canvas.draw_rect(r).unwrap();
+        }
+        Fill::Open(_c, _) => unimplemented!(),
+    }
+}
+
 pub fn draw_elms<T: RenderTarget>(
     canvas: &mut Canvas<T>,
     pos: &render::Pos,
@@ -100,45 +143,6 @@ pub fn draw_elms<T: RenderTarget>(
     fill: &render::Fill,
     elms: &render::Elms,
 ) -> Result<(), String> {
-    fn translate_color(c: &render::Color) -> sdl2::pixels::Color {
-        match c {
-            &render::Color::RGB(r, g, b) => sdl2::pixels::Color::RGB(r as u8, g as u8, b as u8),
-        }
-    };
-    fn translate_rect(pos: &render::Pos, r: &render::Rect) -> sdl2::rect::Rect {
-        // todo -- clip the size of the rect dimension by the bound param
-        sdl2::rect::Rect::new(
-            (pos.x + r.pos.x) as i32,
-            (pos.y + r.pos.y) as i32,
-            r.dim.width as u32,
-            r.dim.height as u32,
-        )
-    };
-    fn draw_rect<T: RenderTarget>(
-        canvas: &mut Canvas<T>,
-        pos: &render::Pos,
-        r: &render::Rect,
-        f: &render::Fill,
-    ) {
-        match f {
-            Fill::None => {
-                // no-op.
-            }
-            Fill::Closed(c) => {
-                let r = translate_rect(pos, r);
-                let c = translate_color(c);
-                canvas.set_draw_color(c);
-                canvas.fill_rect(r).unwrap();
-            }
-            Fill::Open(c, 1) => {
-                let r = translate_rect(pos, r);
-                let c = translate_color(c);
-                canvas.set_draw_color(c);
-                canvas.draw_rect(r).unwrap();
-            }
-            Fill::Open(_c, _) => unimplemented!(),
-        }
-    };
     draw_rect::<T>(
         canvas,
         &pos,
@@ -146,26 +150,39 @@ pub fn draw_elms<T: RenderTarget>(
         fill,
     );
     for elm in elms.iter() {
-        match &elm {
-            &Elm::Node(node) => {
-                let pos = render::Pos {
-                    x: pos.x + node.rect.pos.x,
-                    y: pos.y + node.rect.pos.y,
-                };
-                if false {
-                    draw_rect::<T>(
-                        canvas,
-                        &pos,
-                        &render::Rect::new(0, 0, node.rect.dim.width, node.rect.dim.height),
-                        &node.fill,
-                    );
-                }
-                draw_elms(canvas, &pos, &node.rect.dim, &node.fill, &node.children)?;
-            }
-            &Elm::Rect(r, f) => draw_rect(canvas, pos, r, f),
-        }
+        draw_elm(canvas, pos, dim, fill, elm)?
     }
     Ok(())
+}
+
+pub fn draw_elm<T: RenderTarget>(
+    canvas: &mut Canvas<T>,
+    pos: &render::Pos,
+    dim: &render::Dim,
+    fill: &render::Fill,
+    elm: &render::Elm,
+) -> Result<(), String> {
+    match &elm {
+        &Elm::Node(node) => {
+            let pos = render::Pos {
+                x: pos.x + node.rect.pos.x,
+                y: pos.y + node.rect.pos.y,
+            };
+            if false {
+                draw_rect::<T>(
+                    canvas,
+                    &pos,
+                    &render::Rect::new(0, 0, node.rect.dim.width, node.rect.dim.height),
+                    &node.fill,
+                );
+            }
+            draw_elms(canvas, &pos, &node.rect.dim, &node.fill, &node.children)
+        }
+        &Elm::Rect(r, f) => {
+            draw_rect(canvas, pos, r, f);
+            Ok(())
+        }
+    }
 }
 
 fn translate_system_event(event: SysEvent) -> Option<event::Event> {
@@ -214,16 +231,27 @@ fn translate_system_event(event: SysEvent) -> Option<event::Event> {
     }
 }
 
+
+
 pub fn redraw<T: RenderTarget>(
     canvas: &mut Canvas<T>,
     dim: &render::Dim,
+    rr:&render::Result,
 ) -> Result<(), String> {
     let pos = render::Pos { x: 0, y: 0 };
     let fill = render::Fill::Closed(render::Color::RGB(0, 0, 0));
-    let elms = unimplemented!("get render elements");
-    draw_elms(canvas, &pos, dim, &fill, &elms)?;
+    match rr {
+        Ok(render::Out::Draw(ref elm)) => {
+            draw_elm(canvas, &pos, dim, &fill, &elm)
+        },
+        Err(render::Out::Draw(ref elm)) => {
+            draw_elm(canvas, &pos, dim, &fill, &elm)
+        },
+        _ => {
+            unimplemented!()
+        }
+    };
     canvas.present();
-    drop(elms);
     Ok(())
 }
 
@@ -261,20 +289,17 @@ pub fn do_canister_tick(cfg: &ConnectConfig) -> Result<render::Result, String> {
     ));
     let elapsed = timestamp.elapsed().unwrap();
     if let Ok(blob_res) = blob_res {
-        let result =
-            candid::IDLArgs::from_bytes(&(*blob_res.unwrap().0));
-        let idl_rets = result.unwrap().args;
-        //let render_out = candid::find_render_out(&idl_rets);
-        //repl.update_display(&render_out);
-        let res = format!("{:?}", &idl_rets);
-        let mut res_log = res.clone();
-        if res_log.len() > 80 {
-            res_log.truncate(80);
-            res_log.push_str("...(truncated)");
+        match Decode!(
+            &(*blob_res.unwrap().0)
+                //blob_res
+                , render::Result) {
+            Ok(res) => {
+                Ok(res)
+            },
+            Err(candid_err) => {
+                Err(format!("Candid decoding error: {:?}", candid_err))
+            }
         }
-        info!("..successful result {:?}", res_log);
-        // to do -- decode and draw the result
-        unimplemented!()
     } else {
         let res = format!("{:?}", blob_res);
         info!("..error result {:?}", res);
@@ -309,10 +334,8 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
     info!("Using SDL_Renderer \"{}\"", canvas.info().name);
 
     {
-        do_canister_tick(cfg)?;
-
-        // draw initial frame, before waiting for any events
-        redraw(&mut canvas, &dim);
+        let rr: render::Result = do_canister_tick(cfg)?;
+        redraw(&mut canvas, &dim, &rr);
     }
 
     let mut event_pump = sdl_context.event_pump()?;
@@ -332,14 +355,14 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
         match event {
             event::Event::WindowSizeChange(new_dim) => {
                 dim = new_dim.clone();
-                redraw(&mut canvas, &dim)?;
+                let rr: render::Result = do_canister_tick(cfg)?;
+                redraw(&mut canvas, &dim, &rr)?;
                 continue 'running;
             }
             _ => (),
         };
-        // to do -- update state
-        // to do -- pass state (or elements derived from it) to redraw:
-        redraw(&mut canvas, &dim)?;
+        let rr: render::Result = do_canister_tick(cfg)?;
+        redraw(&mut canvas, &dim, &rr)?;
     };
     Ok(())
 }

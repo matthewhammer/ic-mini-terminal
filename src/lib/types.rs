@@ -47,10 +47,8 @@ pub mod render {
     use super::lang::Name;
     use serde::{Deserialize, Serialize};
 
-    #[derive(Clone, Debug, Serialize, Deserialize, Hash)]
-    pub enum Color {
-        RGB(usize, usize, usize),
-    }
+    pub type Color = (usize, usize, usize);
+
     #[derive(Clone, Debug, Serialize, Deserialize, Hash)]
     pub struct Dim {
         pub width: usize,
@@ -86,13 +84,18 @@ pub mod render {
     }
     #[derive(Clone, Debug, Serialize, Deserialize, Hash)]
     pub enum Fill {
+        #[serde(rename(serialize = "open", deserialize = "open"))]
         Open(Color, usize), // border width
+        #[serde(rename(serialize = "closed", deserialize = "closed"))]
         Closed(Color),
+        #[serde(rename(serialize = "none", deserialize = "none"))]
         None,
     }
     #[derive(Clone, Debug, Serialize, Deserialize, Hash)]
     pub enum Elm {
+        #[serde(rename(serialize = "rect", deserialize = "rect"))]
         Rect(Rect, Fill),
+        #[serde(rename(serialize = "node", deserialize = "node"))]
         Node(Box<Node>),
     }
     pub type Elms = Vec<Elm>;
@@ -100,9 +103,17 @@ pub mod render {
 
     #[derive(Clone, Debug, Serialize, Deserialize, Hash)]
     pub enum Out {
+        #[serde(rename(serialize = "draw", deserialize = "draw"))]
         Draw(Elm),
+        #[serde(rename(serialize = "redraw", deserialize = "redraw"))]
         Redraw(NamedElms),
     }
 
-    pub type Result = std::result::Result<Out, Out>;
+    #[derive(Clone, Debug, Serialize, Deserialize, Hash)]
+    pub enum Result {
+        #[serde(rename(serialize = "ok", deserialize = "ok"))]
+        Ok(Out),
+        #[serde(rename(serialize = "err", deserialize = "err"))]
+        Err(Out),
+    }
 }

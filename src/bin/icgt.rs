@@ -81,7 +81,7 @@ fn init_log(level_filter: log::LevelFilter) {
         .init();
 }
 
-use icgt::types::{event, render::{self, Fill, Elm}};
+use icgt::types::{self, {event, render::{self, Fill, Elm}}};
 use sdl2::render::{Canvas, RenderTarget};
 
 const RETRY_PAUSE: Duration = Duration::from_millis(100);
@@ -96,7 +96,7 @@ pub fn agent(url: &str) -> Result<Agent, ic_agent::AgentError> {
 
 fn translate_color(c: &render::Color) -> sdl2::pixels::Color {
     match c {
-        &render::Color::RGB(r, g, b) => sdl2::pixels::Color::RGB(r as u8, g as u8, b as u8),
+        (r, g, b) => sdl2::pixels::Color::RGB(*r as u8, *g as u8, *b as u8),
     }
 }
 
@@ -239,12 +239,12 @@ pub fn redraw<T: RenderTarget>(
     rr:&render::Result,
 ) -> Result<(), String> {
     let pos = render::Pos { x: 0, y: 0 };
-    let fill = render::Fill::Closed(render::Color::RGB(0, 0, 0));
+    let fill = render::Fill::Closed((0, 0, 0));
     match rr {
-        Ok(render::Out::Draw(ref elm)) => {
+        render::Result::Ok(render::Out::Draw(ref elm)) => {
             draw_elm(canvas, &pos, dim, &fill, &elm)
         },
-        Err(render::Out::Draw(ref elm)) => {
+        render::Result::Err(render::Out::Draw(ref elm)) => {
             draw_elm(canvas, &pos, dim, &fill, &elm)
         },
         _ => {

@@ -1,10 +1,11 @@
-extern crate hashcons;
+//extern crate hashcons;
 extern crate sdl2;
 extern crate serde;
 extern crate tokio;
 extern crate icgt;
 extern crate delay;
 extern crate ic_agent;
+extern crate num_traits;
 
 #[macro_use]
 extern crate candid;
@@ -22,13 +23,14 @@ extern crate structopt;
 use structopt::StructOpt;
 
 use delay::Delay;
-use sdl2::event::Event as SysEvent;
+use sdl2::event::Event as SysEvent; // not to be confused with our own definition
 use sdl2::event::WindowEvent;
 use sdl2::keyboard::Keycode;
 use std::io;
 use std::time::Duration;
 use ic_agent::{Agent, AgentConfig, Blob, CanisterId};
-use candid::IDLArgs;
+use candid::{Nat, Int, IDLArgs};
+use num_traits::cast::ToPrimitive;
 
 /// Internet Computer Game Terminal (icgt)
 #[derive(StructOpt, Debug, Clone)]
@@ -53,6 +55,22 @@ pub struct ConnectConfig {
     cli_opt: CliOpt,
     canister_id: String,
     replica_url: String,
+}
+
+/// Messages that go from this terminal binary to the server cansiter
+#[derive(Debug, Clone)]
+pub enum ServerCall {
+    // to do -- include the local clock, or a duration since last tick;
+    // we don't have time in the server
+    Tick,
+
+    WindowSizeChange(render::Dim),
+
+    // to do -- more generally, proj events
+    ProjKeyDown(Vec<event::KeyEventInfo>),
+
+    // to do -- more generally, push events
+    PushKeyDown(Vec<event::KeyEventInfo>),
 }
 
 #[derive(StructOpt, Debug, Clone)]
@@ -81,7 +99,7 @@ fn init_log(level_filter: log::LevelFilter) {
         .init();
 }
 
-use icgt::types::{self, {event, render::{self, Fill, Elm}}};
+use icgt::types::{event, render::{self, Fill, Elm}};
 use sdl2::render::{Canvas, RenderTarget};
 
 const RETRY_PAUSE: Duration = Duration::from_millis(100);
@@ -94,19 +112,34 @@ pub fn agent(url: &str) -> Result<Agent, ic_agent::AgentError> {
     })
 }
 
+fn nat_ceil(n:&Nat) -> u32 {
+    n.0.to_u32().unwrap()
+}
+
+fn int_ceil(n:&Int) -> i32 {
+    n.0.to_i32().unwrap()
+}
+
+fn byte_ceil(n:&Nat) -> u8 {
+    match n.0.to_u8() {
+        Some(byte) => byte,
+        None => 255,
+    }
+}
+
 fn translate_color(c: &render::Color) -> sdl2::pixels::Color {
     match c {
-        (r, g, b) => sdl2::pixels::Color::RGB(*r as u8, *g as u8, *b as u8),
+        (r, g, b) => sdl2::pixels::Color::RGB(byte_ceil(r), byte_ceil(g), byte_ceil(b))
     }
 }
 
 fn translate_rect(pos: &render::Pos, r: &render::Rect) -> sdl2::rect::Rect {
     // todo -- clip the size of the rect dimension by the bound param
     sdl2::rect::Rect::new(
-        (pos.x + r.pos.x) as i32,
-        (pos.y + r.pos.y) as i32,
-        r.dim.width as u32,
-        r.dim.height as u32,
+        int_ceil(& Int(&pos.x.0 + &r.pos.x.0)),
+        int_ceil(& Int(&pos.y.0 + &r.pos.y.0)),
+        nat_ceil(& r.dim.width),
+        nat_ceil(& r.dim.height),
     )
 }
 
@@ -126,14 +159,21 @@ fn draw_rect<T: RenderTarget>(
             canvas.set_draw_color(c);
             canvas.fill_rect(r).unwrap();
         }
-        Fill::Open(c, 1) => {
+        Fill::Open(c, _) => {
             let r = translate_rect(pos, r);
             let c = translate_color(c);
             canvas.set_draw_color(c);
             canvas.draw_rect(r).unwrap();
         }
-        Fill::Open(_c, _) => unimplemented!(),
     }
+}
+
+pub fn nat_zero() -> Nat {
+    Nat::from(0)
+}
+
+pub fn int_zero() -> Int {
+    Int::from(0)
 }
 
 pub fn draw_elms<T: RenderTarget>(
@@ -146,11 +186,11 @@ pub fn draw_elms<T: RenderTarget>(
     draw_rect::<T>(
         canvas,
         &pos,
-        &render::Rect::new(0, 0, dim.width, dim.height),
+        &render::Rect::new(int_zero(), int_zero(), dim.width.clone(), dim.height.clone()),
         fill,
     );
     for elm in elms.iter() {
-        draw_elm(canvas, pos, dim, fill, elm)?
+        draw_elm(canvas, pos, elm)?
     }
     Ok(())
 }
@@ -158,25 +198,25 @@ pub fn draw_elms<T: RenderTarget>(
 pub fn draw_elm<T: RenderTarget>(
     canvas: &mut Canvas<T>,
     pos: &render::Pos,
-    dim: &render::Dim,
-    fill: &render::Fill,
     elm: &render::Elm,
 ) -> Result<(), String> {
     match &elm {
         &Elm::Node(node) => {
             let pos = render::Pos {
-                x: pos.x + node.rect.pos.x,
-                y: pos.y + node.rect.pos.y,
+                x: Int(&pos.x.0 + &node.rect.pos.x.0),
+                y: Int(&pos.y.0 + &node.rect.pos.y.0),
             };
             if false {
                 draw_rect::<T>(
                     canvas,
                     &pos,
-                    &render::Rect::new(0, 0, node.rect.dim.width, node.rect.dim.height),
+                    &render::Rect::new(int_zero(), int_zero(),
+                                       node.rect.dim.width.clone(),
+                                       node.rect.dim.height.clone()),
                     &node.fill,
                 );
             }
-            draw_elms(canvas, &pos, &node.rect.dim, &node.fill, &node.children)
+            draw_elms(canvas, &pos, &node.rect.dim, &node.fill, &node.elms)
         }
         &Elm::Rect(r, f) => {
             draw_rect(canvas, pos, r, f);
@@ -192,8 +232,8 @@ fn translate_system_event(event: SysEvent) -> Option<event::Event> {
             ..
         } => {
             let dim = render::Dim {
-                width: *w as usize,
-                height: *h as usize,
+                width: Nat::from(*w as u64),
+                height: Nat::from(*h as u64),
             };
             Some(event::Event::WindowSizeChange(dim))
         }
@@ -231,21 +271,19 @@ fn translate_system_event(event: SysEvent) -> Option<event::Event> {
     }
 }
 
-
-
 pub fn redraw<T: RenderTarget>(
     canvas: &mut Canvas<T>,
     dim: &render::Dim,
     rr:&render::Result,
 ) -> Result<(), String> {
-    let pos = render::Pos { x: 0, y: 0 };
-    let fill = render::Fill::Closed((0, 0, 0));
+    let pos = render::Pos { x: int_zero(), y: int_zero() };
+    let fill = render::Fill::Closed((nat_zero(), nat_zero(), nat_zero()));
     match rr {
-        render::Result::Ok(render::Out::Draw(ref elm)) => {
-            draw_elm(canvas, &pos, dim, &fill, &elm)
+        render::Result::Ok(render::Out::Draw(elm)) => {
+            draw_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
         },
-        render::Result::Err(render::Out::Draw(ref elm)) => {
-            draw_elm(canvas, &pos, dim, &fill, &elm)
+        render::Result::Err(render::Out::Draw(elm)) => {
+            draw_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
         },
         _ => {
             unimplemented!()
@@ -255,18 +293,8 @@ pub fn redraw<T: RenderTarget>(
     Ok(())
 }
 
-pub fn do_canister_tick(cfg: &ConnectConfig) -> Result<render::Result, String> {
-    use ic_agent::{Blob, CanisterId};
-    use std::time::Duration;
+pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Result, String> {
     use tokio::runtime::Runtime;
-    let args_str = "()";
-    let args = {
-        if let Ok(args) = &args_str.parse::<IDLArgs>() {
-            args.clone()
-        } else {
-            return Err(format!("do_canister_tick() failed to parse args: {:?}", args_str))
-        }
-    };
     info!(
         "...to canister_id {:?} at replica_url {:?}",
         cfg.canister_id,
@@ -281,13 +309,42 @@ pub fn do_canister_tick(cfg: &ConnectConfig) -> Result<render::Result, String> {
     let canister_id =
         CanisterId::from_text(cfg.canister_id.clone()).unwrap();
     let timestamp = std::time::SystemTime::now();
-    let blob_res = runtime.block_on(agent.call_and_wait(
-        &canister_id,
-        &"tick",
-        &Blob(args.to_bytes().unwrap()),
-        delay,
-    ));
+    info!("server_call: {:?}", call);
+    info!("server_call: Awaiting response from server...");
+    let blob_res = match call {
+        ServerCall::WindowSizeChange(window_dim) => {
+            runtime.block_on(agent.call_and_wait(
+                &canister_id,
+                &"windowSizeChange",
+                &Blob(Encode!(window_dim).unwrap()),
+                delay,
+            ))
+        }
+        ServerCall::Tick => {
+            let args_str = "()";
+            let args = {
+                if let Ok(args) = &args_str.parse::<IDLArgs>() {
+                    args.clone()
+                } else {
+                    return Err(format!("server_call: failed to parse args: {:?}", args_str))
+                }
+            };
+            runtime.block_on(agent.call_and_wait(
+                &canister_id,
+                &"tick",
+                &Blob(args.to_bytes().unwrap()),
+                delay,
+            ))
+        },
+        ServerCall::ProjKeyDown(_keys) => {
+            unimplemented!()
+        },
+        ServerCall::PushKeyDown(_keys) => {
+            unimplemented!()
+        },
+    };
     let elapsed = timestamp.elapsed().unwrap();
+    info!("server_call: elapsed {:?}", elapsed);
     if let Ok(blob_res) = blob_res {
         match Decode!(
             &(*blob_res.unwrap().0)
@@ -309,14 +366,16 @@ pub fn do_canister_tick(cfg: &ConnectConfig) -> Result<render::Result, String> {
 
 pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
     use sdl2::event::EventType;
-    let mut dim = render::Dim {
-        width: 1000,
-        height: 666,
+    let mut window_dim = render::Dim {
+        width: Nat::from(1000),
+        height: Nat::from(666),
     };
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
     let window = video_subsystem
-        .window("thin-ic-agent", dim.width as u32, dim.height as u32)
+        .window("ic-game-terminal",
+                nat_ceil(&window_dim.width),
+                nat_ceil(&window_dim.height))
         .position_centered()
         .resizable()
         //.input_grabbed()
@@ -334,8 +393,8 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
     info!("Using SDL_Renderer \"{}\"", canvas.info().name);
 
     {
-        let rr: render::Result = do_canister_tick(cfg)?;
-        redraw(&mut canvas, &dim, &rr);
+        let rr: render::Result = server_call(cfg, &ServerCall::Tick)?;
+        redraw(&mut canvas, &window_dim, &rr)?;
     }
 
     let mut event_pump = sdl_context.event_pump()?;
@@ -354,17 +413,26 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
         // catch window resize event: redraw and loop:
         match event {
             event::Event::WindowSizeChange(new_dim) => {
-                dim = new_dim.clone();
-                let rr: render::Result = do_canister_tick(cfg)?;
-                redraw(&mut canvas, &dim, &rr)?;
+                let rr: render::Result =
+                    server_call(cfg, &ServerCall::WindowSizeChange(new_dim.clone()))?;
+                window_dim = new_dim;
+                redraw(&mut canvas, &window_dim, &rr)?;
                 continue 'running;
+            },
+            event::Event::Quit => {
+                return Ok(())
+            },
+            event::Event::KeyDown(ref ke_info) => {
+                println!("to do: handle KeyDown: {:?}", ke_info.key);
+                println!("  ...doing Tick");
+                let rr: render::Result = server_call(cfg, &ServerCall::Tick)?;
+                redraw(&mut canvas, &window_dim, &rr)?;
+            },
+            _ => {
+                println!("to do: handle event: {:?}", event)
             }
-            _ => (),
         };
-        let rr: render::Result = do_canister_tick(cfg)?;
-        redraw(&mut canvas, &dim, &rr)?;
-    };
-    Ok(())
+    }
 }
 
 fn main() {

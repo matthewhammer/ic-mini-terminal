@@ -99,7 +99,7 @@ fn init_log(level_filter: log::LevelFilter) {
         .init();
 }
 
-use icgt::types::{self, {event, render::{self, Fill, Elm}}};
+use icgt::types::{event, render::{self, Fill, Elm}};
 use sdl2::render::{Canvas, RenderTarget};
 
 const RETRY_PAUSE: Duration = Duration::from_millis(100);
@@ -280,10 +280,10 @@ pub fn redraw<T: RenderTarget>(
     let fill = render::Fill::Closed((nat_zero(), nat_zero(), nat_zero()));
     match rr {
         render::Result::Ok(render::Out::Draw(elm)) => {
-            draw_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])
+            draw_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
         },
         render::Result::Err(render::Out::Draw(elm)) => {
-            draw_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])
+            draw_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
         },
         _ => {
             unimplemented!()
@@ -294,7 +294,6 @@ pub fn redraw<T: RenderTarget>(
 }
 
 pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Result, String> {
-    use ic_agent::{Blob, CanisterId};
     use tokio::runtime::Runtime;
     info!(
         "...to canister_id {:?} at replica_url {:?}",
@@ -395,7 +394,7 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
 
     {
         let rr: render::Result = server_call(cfg, &ServerCall::Tick)?;
-        redraw(&mut canvas, &window_dim, &rr);
+        redraw(&mut canvas, &window_dim, &rr)?;
     }
 
     let mut event_pump = sdl_context.event_pump()?;

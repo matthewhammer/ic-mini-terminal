@@ -15,7 +15,7 @@ serde_json = "1.0"
 sdl2 = "0.32"
 tokio = "0.2.10"
 delay = "0.1.0"
-candid = { path = "/Users/matthew/dfn/candid/candid" }
+candid = { git = "https://github.com/dfinity/candid" }
 num-bigint = "0.2.6"
 num-traits = "0.2.6"
 

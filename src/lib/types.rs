@@ -52,7 +52,7 @@ pub mod event {
 /// Information from Motoko canister logic to Rust graphics output (via SDL2).
 pub mod render {
     use super::{Nat, Int};
-    use super::lang::Name;
+    //use super::lang::Name;
     use candid::{CandidType, Deserialize};
 
     pub type Color = (Nat, Nat, Nat);

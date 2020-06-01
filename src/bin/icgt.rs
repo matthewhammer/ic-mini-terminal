@@ -23,7 +23,7 @@ extern crate structopt;
 use structopt::StructOpt;
 
 use delay::Delay;
-use sdl2::event::Event as SysEvent;
+use sdl2::event::Event as SysEvent; // not to be confused with our own definition
 use sdl2::event::WindowEvent;
 use sdl2::keyboard::Keycode;
 use std::io;
@@ -56,6 +56,20 @@ pub struct ConnectConfig {
     cli_opt: CliOpt,
     canister_id: String,
     replica_url: String,
+}
+
+/// Messages that go from this terminal binary to the server cansiter
+#[derive(Debug, Clone)]
+pub enum ServerCall {
+    // to do -- include the local clock, or a duration since last tick;
+    // we don't have time in the server
+    Tick,
+
+    // to do -- more generally, proj events
+    ProjKeyDown(Vec<event::KeyEventInfo>),
+
+    // to do -- more generally, push events
+    PushKeyDown(Vec<event::KeyEventInfo>),
 }
 
 #[derive(StructOpt, Debug, Clone)]
@@ -258,8 +272,6 @@ fn translate_system_event(event: SysEvent) -> Option<event::Event> {
     }
 }
 
-
-
 pub fn redraw<T: RenderTarget>(
     canvas: &mut Canvas<T>,
     dim: &render::Dim,
@@ -268,11 +280,11 @@ pub fn redraw<T: RenderTarget>(
     let pos = render::Pos { x: int_zero(), y: int_zero() };
     let fill = render::Fill::Closed((nat_zero(), nat_zero(), nat_zero()));
     match rr {
-        render::Result::Ok(render::Out::Draw(ref elm)) => {
-            draw_elm(canvas, &pos, dim, &fill, &elm)
+        render::Result::Ok(render::Out::Draw(elm)) => {
+            draw_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])
         },
-        render::Result::Err(render::Out::Draw(ref elm)) => {
-            draw_elm(canvas, &pos, dim, &fill, &elm)
+        render::Result::Err(render::Out::Draw(elm)) => {
+            draw_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])
         },
         _ => {
             unimplemented!()
@@ -282,18 +294,10 @@ pub fn redraw<T: RenderTarget>(
     Ok(())
 }
 
-pub fn do_canister_tick(cfg: &ConnectConfig) -> Result<render::Result, String> {
+pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Result, String> {
     use ic_agent::{Blob, CanisterId};
     use std::time::Duration;
     use tokio::runtime::Runtime;
-    let args_str = "()";
-    let args = {
-        if let Ok(args) = &args_str.parse::<IDLArgs>() {
-            args.clone()
-        } else {
-            return Err(format!("do_canister_tick() failed to parse args: {:?}", args_str))
-        }
-    };
     info!(
         "...to canister_id {:?} at replica_url {:?}",
         cfg.canister_id,
@@ -308,12 +312,30 @@ pub fn do_canister_tick(cfg: &ConnectConfig) -> Result<render::Result, String> {
     let canister_id =
         CanisterId::from_text(cfg.canister_id.clone()).unwrap();
     let timestamp = std::time::SystemTime::now();
-    let blob_res = runtime.block_on(agent.call_and_wait(
-        &canister_id,
-        &"tick",
-        &Blob(args.to_bytes().unwrap()),
-        delay,
-    ));
+    let blob_res = match call {
+        ServerCall::Tick => {
+            let args_str = "()";
+            let args = {
+                if let Ok(args) = &args_str.parse::<IDLArgs>() {
+                    args.clone()
+                } else {
+                    return Err(format!("do_server_call: failed to parse args: {:?}", args_str))
+                }
+            };
+            runtime.block_on(agent.call_and_wait(
+                &canister_id,
+                &"tick",
+                &Blob(args.to_bytes().unwrap()),
+                delay,
+            ))
+        },
+        ServerCall::ProjKeyDown(_keys) => {
+            unimplemented!()
+        },
+        ServerCall::PushKeyDown(_keys) => {
+            unimplemented!()
+        },
+    };
     let elapsed = timestamp.elapsed().unwrap();
     if let Ok(blob_res) = blob_res {
         match Decode!(
@@ -361,7 +383,7 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
     info!("Using SDL_Renderer \"{}\"", canvas.info().name);
 
     {
-        let rr: render::Result = do_canister_tick(cfg)?;
+        let rr: render::Result = server_call(cfg, &ServerCall::Tick)?;
         redraw(&mut canvas, &dim, &rr);
     }
 
@@ -381,8 +403,9 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
         // catch window resize event: redraw and loop:
         match event {
             event::Event::WindowSizeChange(new_dim) => {
-                dim = new_dim.clone();
-                let rr: render::Result = do_canister_tick(cfg)?;
+                // to do -- send updated window dimension to the canister
+                // let cfg = {cfg .. dim = new_dim.clone()};
+                let rr: render::Result = server_call(cfg, &ServerCall::Tick)?;
                 redraw(&mut canvas, &dim, &rr)?;
                 continue 'running;
             },
@@ -393,7 +416,7 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
                 println!("to do: handle: {:?}", event)
             }
         };
-        let rr: render::Result = do_canister_tick(cfg)?;
+        let rr: render::Result = server_call(cfg, &ServerCall::Tick)?;
         redraw(&mut canvas, &dim, &rr)?;
     };
     Ok(())

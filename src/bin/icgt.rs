@@ -65,6 +65,8 @@ pub enum ServerCall {
     // we don't have time in the server
     Tick,
 
+    WindowSizeChange(render::Dim),
+
     // to do -- more generally, proj events
     ProjKeyDown(Vec<event::KeyEventInfo>),
 
@@ -313,6 +315,14 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
         CanisterId::from_text(cfg.canister_id.clone()).unwrap();
     let timestamp = std::time::SystemTime::now();
     let blob_res = match call {
+        ServerCall::WindowSizeChange(window_dim) => {
+            runtime.block_on(agent.call_and_wait(
+                &canister_id,
+                &"windowSizeChange",
+                &Blob(Encode!(window_dim).unwrap()),
+                delay,
+            ))
+        }
         ServerCall::Tick => {
             let args_str = "()";
             let args = {
@@ -405,9 +415,8 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
         // catch window resize event: redraw and loop:
         match event {
             event::Event::WindowSizeChange(new_dim) => {
-                // to do -- send updated window dimension to the canister
-                // let cfg = {cfg .. dim = new_dim.clone()};
-                let rr: render::Result = server_call(cfg, &ServerCall::Tick)?;
+                let rr: render::Result =
+                    server_call(cfg, &ServerCall::WindowSizeChange(new_dim.clone()))?;
                 window_dim = new_dim;
                 redraw(&mut canvas, &window_dim, &rr)?;
                 continue 'running;

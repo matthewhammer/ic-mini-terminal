@@ -2,14 +2,28 @@ import Result "mo:base/result";
 import Render "mo:redraw/render";
 import Array "mo:base/array";
 import I "mo:base/iter";
+import Debug "mo:base/Debug";
 
 actor {
 
   var n = 0;
 
+  var windowDim : Render.Dim = {
+    width = 0;
+    height = 0;
+  };
+
   public func reset() { n := 0 };
 
+  public func windowSizeChange(dim:Render.Dim) : async Result.Result<Render.Out, Render.Out> {
+    Debug.print "windowSizeChange";
+    Debug.print (debug_show dim);
+    windowDim := dim;
+    await tick()
+  };
+
   public func tick() : async Result.Result<Render.Out, Render.Out> {
+    Debug.print "tick";
     n := n + 1;
 
     func getRect(n:Nat) : Render.Rect = {

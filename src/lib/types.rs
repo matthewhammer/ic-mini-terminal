@@ -9,7 +9,7 @@ pub mod lang {
     use serde::{Deserialize, Serialize};
     use candid::CandidType;
 
-    #[derive(Debug, Clone, CandidType, Eq, PartialEq, Hash)]
+    #[derive(Debug, Clone, CandidType, Deserialize, Eq, PartialEq, Hash)]
     pub enum Name {
         Void,
         Atom(Atom),
@@ -17,7 +17,7 @@ pub mod lang {
         Merkle(Merkle<Name>),
     }
 
-    #[derive(Debug, Clone, CandidType, Eq, PartialEq, Hash)]
+    #[derive(Debug, Clone, CandidType, Deserialize, Eq, PartialEq, Hash)]
     pub enum Atom {
         Bool(bool),
         Nat(Nat),
@@ -30,14 +30,14 @@ pub mod event {
     use serde::{Deserialize, Serialize};
     use candid::CandidType;
 
-    #[derive(Clone, Debug, CandidType, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Event {
         Quit,
         KeyDown(KeyEventInfo),
         KeyUp(KeyEventInfo),
         WindowSizeChange(super::render::Dim),
     }
-    #[derive(Clone, Debug, CandidType, Hash, PartialEq, Eq]
+    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub struct KeyEventInfo {
         pub key: String,
         pub alt: bool,
@@ -55,17 +55,17 @@ pub mod render {
 
     pub type Color = (Nat, Nat, Nat);
 
-    #[derive(Clone, Debug, CandidType, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub struct Dim {
         pub width: Nat,
         pub height: Nat,
     }
-    #[derive(Clone, Debug, CandidType, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub struct Pos {
         pub x: Int,
         pub y: Int,
     }
-    #[derive(Clone, Debug, CandidType, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub struct Rect {
         pub pos: Pos,
         pub dim: Dim,
@@ -81,7 +81,7 @@ pub mod render {
             }
         }
     }
-    #[derive(Clone, Debug, CandidType, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub struct Node {
         pub name: Name,
         pub rect: Rect,
@@ -90,18 +90,18 @@ pub mod render {
     }
     #[derive(Clone, Debug, CandidType, Serialize, Deserialize, Hash, PartialEq, Eq)]
     pub enum Fill {
-        #[serde(rename(serialize = "open", deserialize = "open"))]
+        #[serde(rename(deserialize = "open"))]
         Open(Color, Nat), // border width
-        #[serde(rename(serialize = "closed", deserialize = "closed"))]
+        #[serde(rename(deserialize = "closed"))]
         Closed(Color),
-        #[serde(rename(serialize = "none", deserialize = "none"))]
+        #[serde(rename(deserialize = "none"))]
         None,
     }
     #[derive(Clone, Debug, CandidType, Serialize, Deserialize, Hash, PartialEq, Eq)]
     pub enum Elm {
-        #[serde(rename(serialize = "rect", deserialize = "rect"))]
+        #[serde(rename(deserialize = "rect"))]
         Rect(Rect, Fill),
-        #[serde(rename(serialize = "node", deserialize = "node"))]
+        #[serde(rename(deserialize = "node"))]
         Node(Box<Node>),
     }
     pub type Elms = Vec<Elm>;
@@ -109,17 +109,17 @@ pub mod render {
 
     #[derive(Clone, Debug, CandidType, Serialize, Deserialize, Hash, PartialEq, Eq)]
     pub enum Out {
-        #[serde(rename(serialize = "draw", deserialize = "draw"))]
+        #[serde(rename(deserialize = "draw"))]
         Draw(Elm),
-        #[serde(rename(serialize = "redraw", deserialize = "redraw"))]
+        #[serde(rename(deserialize = "redraw"))]
         Redraw(NamedElms),
     }
 
     #[derive(Clone, Debug, CandidType, Serialize, Deserialize, Hash, PartialEq, Eq)]
     pub enum Result {
-        #[serde(rename(serialize = "ok", deserialize = "ok"))]
+        #[serde(rename(deserialize = "ok"))]
         Ok(Out),
-        #[serde(rename(serialize = "err", deserialize = "err"))]
+        #[serde(rename(deserialize = "err"))]
         Err(Out),
     }
 }

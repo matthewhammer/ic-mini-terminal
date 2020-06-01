@@ -1,4 +1,4 @@
-extern crate hashcons;
+//extern crate hashcons;
 extern crate sdl2;
 extern crate serde;
 extern crate tokio;

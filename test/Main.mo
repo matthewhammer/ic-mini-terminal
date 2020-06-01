@@ -6,26 +6,21 @@ import Debug "mo:base/Debug";
 
 actor {
 
-  var n = 0;
+  var n = 1;
 
   var windowDim : Render.Dim = {
     width = 0;
     height = 0;
   };
 
-  public func reset() { n := 0 };
-
   public func windowSizeChange(dim:Render.Dim) : async Result.Result<Render.Out, Render.Out> {
     Debug.print "windowSizeChange";
     Debug.print (debug_show dim);
     windowDim := dim;
-    await tick()
+    drawWorld()
   };
 
-  public func tick() : async Result.Result<Render.Out, Render.Out> {
-    Debug.print "tick";
-    n := n + 1;
-
+  func drawWorld() : Result.Result<Render.Out, Render.Out> {
     func getRect(n:Nat) : Render.Rect = {
       let fluff = if(n < 10){11 - n} else { 5 };
       {
@@ -51,6 +46,12 @@ actor {
     };
     r.end();
     #ok(#draw(r.getElm()))
+  };
+
+  public func tick() : async Result.Result<Render.Out, Render.Out> {
+    Debug.print "tick";
+    n := n + 1;
+    drawWorld()
   };
 
   func textAtts() : Render.TextAtts = {

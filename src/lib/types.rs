@@ -5,7 +5,7 @@ pub type Int = candid::Int;
 
 pub mod lang {
     use super::Nat;
-    use hashcons::merkle::Merkle;
+    //use hashcons::merkle::Merkle;
     use candid::{CandidType, Deserialize};
 
     #[derive(Debug, Clone, CandidType, Deserialize, Eq, PartialEq, Hash)]
@@ -13,7 +13,7 @@ pub mod lang {
         Void,
         Atom(Atom),
         TaggedTuple(Box<Name>, Vec<Name>),
-        Merkle(Merkle<Name>),
+        //Merkle(Merkle<Name>),
     }
 
     #[derive(Debug, Clone, CandidType, Deserialize, Eq, PartialEq, Hash)]
@@ -24,6 +24,9 @@ pub mod lang {
     }
 }
 
+/// Game terminal to game server:
+///
+/// Information from Rust event loop (via SDL2) to Motoko canister logic.
 pub mod event {
     use candid::{CandidType, Deserialize};
 
@@ -44,6 +47,9 @@ pub mod event {
     }
 }
 
+/// Game server to game terminal:
+///
+/// Information from Motoko canister logic to Rust graphics output (via SDL2).
 pub mod render {
     use super::{Nat, Int};
     use super::lang::Name;
@@ -84,7 +90,7 @@ pub mod render {
         pub fill: Fill,
         pub children: Elms,
     }
-    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]q
+    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Fill {
         #[serde(rename(deserialize = "open"))]
         Open(Color, Nat), // border width

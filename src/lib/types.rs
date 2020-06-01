@@ -6,8 +6,7 @@ pub type Int = candid::Int;
 pub mod lang {
     use super::Nat;
     use hashcons::merkle::Merkle;
-    use serde::{Deserialize, Serialize};
-    use candid::CandidType;
+    use candid::{CandidType, Deserialize};
 
     #[derive(Debug, Clone, CandidType, Deserialize, Eq, PartialEq, Hash)]
     pub enum Name {
@@ -26,9 +25,7 @@ pub mod lang {
 }
 
 pub mod event {
-    use super::Nat;
-    use serde::{Deserialize, Serialize};
-    use candid::CandidType;
+    use candid::{CandidType, Deserialize};
 
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Event {
@@ -50,8 +47,7 @@ pub mod event {
 pub mod render {
     use super::{Nat, Int};
     use super::lang::Name;
-    use serde::{Deserialize, Serialize};
-    use candid::CandidType;
+    use candid::{CandidType, Deserialize};
 
     pub type Color = (Nat, Nat, Nat);
 
@@ -88,7 +84,7 @@ pub mod render {
         pub fill: Fill,
         pub children: Elms,
     }
-    #[derive(Clone, Debug, CandidType, Serialize, Deserialize, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]q
     pub enum Fill {
         #[serde(rename(deserialize = "open"))]
         Open(Color, Nat), // border width
@@ -97,7 +93,7 @@ pub mod render {
         #[serde(rename(deserialize = "none"))]
         None,
     }
-    #[derive(Clone, Debug, CandidType, Serialize, Deserialize, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Elm {
         #[serde(rename(deserialize = "rect"))]
         Rect(Rect, Fill),
@@ -107,7 +103,7 @@ pub mod render {
     pub type Elms = Vec<Elm>;
     pub type NamedElms = Vec<(Name, Elm)>;
 
-    #[derive(Clone, Debug, CandidType, Serialize, Deserialize, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Out {
         #[serde(rename(deserialize = "draw"))]
         Draw(Elm),
@@ -115,7 +111,7 @@ pub mod render {
         Redraw(NamedElms),
     }
 
-    #[derive(Clone, Debug, CandidType, Serialize, Deserialize, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Result {
         #[serde(rename(deserialize = "ok"))]
         Ok(Out),

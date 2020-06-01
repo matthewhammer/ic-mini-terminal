@@ -16,7 +16,9 @@ hashcons = "0.1"
 sdl2 = "0.32"
 tokio = "0.2.10"
 delay = "0.1.0"
-candid = "0.2.3"
+#candid = "0.2.3"
+candid = { path = "/Users/matthew/dfn/candid/candid" }
+candid_derive = { path = "/Users/matthew/dfn/candid/candid_derive" }
 
 ic-agent = { path = "/Users/matthew/dfn/sdk/src/agent/rust" }
 

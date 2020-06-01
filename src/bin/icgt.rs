@@ -31,6 +31,7 @@ use std::time::Duration;
 use ic_agent::{Agent, AgentConfig, Blob, CanisterId};
 use candid::{Nat, Int, IDLArgs};
 use num_traits::{Zero, One};
+use num_traits::cast::ToPrimitive;
 
 /// Internet Computer Game Terminal (icgt)
 #[derive(StructOpt, Debug, Clone)]
@@ -97,32 +98,17 @@ pub fn agent(url: &str) -> Result<Agent, ic_agent::AgentError> {
 }
 
 fn nat_ceil(n:&Nat) -> u32 {
-    if n.0 > Nat::from(u32::max_value() as u64).0 {
-        u32::max_value()
-    }
-    else {
-        // to do -- do this smarter/faster:
-        format!("{}", n.0).parse::<u32>().unwrap()
-    }
+    n.0.to_u32().unwrap()
 }
 
 fn int_ceil(n:&Int) -> i32 {
-    if n.0 > Int::from(i32::max_value() as i64).0 {
-        i32::max_value()
-    }
-    else {
-        // to do -- do this smarter/faster:
-        format!("{}", n.0).parse::<i32>().unwrap()
-    }
+    n.0.to_i32().unwrap()
 }
 
 fn byte_ceil(n:&Nat) -> u8 {
-    if n.0 > Nat::from(u8::max_value() as u64).0 {
-        u8::max_value()
-    }
-    else {
-        // to do -- do this smarter/faster:
-        format!("{}", n.0).parse::<u8>().unwrap()
+    match n.0.to_u8() {
+        Some(byte) => byte,
+        None => 255,
     }
 }
 
@@ -399,8 +385,13 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
                 let rr: render::Result = do_canister_tick(cfg)?;
                 redraw(&mut canvas, &dim, &rr)?;
                 continue 'running;
+            },
+            event::Event::Quit => {
+                return Ok(())
+            },
+            _ => {
+                println!("to do: handle: {:?}", event)
             }
-            _ => (),
         };
         let rr: render::Result = do_canister_tick(cfg)?;
         redraw(&mut canvas, &dim, &rr)?;

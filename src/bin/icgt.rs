@@ -358,14 +358,16 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
 
 pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
     use sdl2::event::EventType;
-    let mut dim = render::Dim {
+    let mut window_dim = render::Dim {
         width: Nat::from(1000),
         height: Nat::from(666),
     };
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
     let window = video_subsystem
-        .window("ic-game-terminal", nat_ceil(&dim.width), nat_ceil(&dim.height))
+        .window("ic-game-terminal",
+                nat_ceil(&window_dim.width),
+                nat_ceil(&window_dim.height))
         .position_centered()
         .resizable()
         //.input_grabbed()
@@ -384,7 +386,7 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
 
     {
         let rr: render::Result = server_call(cfg, &ServerCall::Tick)?;
-        redraw(&mut canvas, &dim, &rr);
+        redraw(&mut canvas, &window_dim, &rr);
     }
 
     let mut event_pump = sdl_context.event_pump()?;
@@ -406,7 +408,8 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
                 // to do -- send updated window dimension to the canister
                 // let cfg = {cfg .. dim = new_dim.clone()};
                 let rr: render::Result = server_call(cfg, &ServerCall::Tick)?;
-                redraw(&mut canvas, &dim, &rr)?;
+                window_dim = new_dim;
+                redraw(&mut canvas, &window_dim, &rr)?;
                 continue 'running;
             },
             event::Event::Quit => {
@@ -417,7 +420,7 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
             }
         };
         let rr: render::Result = server_call(cfg, &ServerCall::Tick)?;
-        redraw(&mut canvas, &dim, &rr)?;
+        redraw(&mut canvas, &window_dim, &rr)?;
     };
     Ok(())
 }

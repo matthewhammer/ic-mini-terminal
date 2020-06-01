@@ -5,6 +5,7 @@ extern crate tokio;
 extern crate icgt;
 extern crate delay;
 extern crate ic_agent;
+extern crate num_traits;
 
 #[macro_use]
 extern crate candid;
@@ -28,7 +29,8 @@ use sdl2::keyboard::Keycode;
 use std::io;
 use std::time::Duration;
 use ic_agent::{Agent, AgentConfig, Blob, CanisterId};
-use candid::IDLArgs;
+use candid::{Nat, Int, IDLArgs};
+use num_traits::{Zero, One};
 
 /// Internet Computer Game Terminal (icgt)
 #[derive(StructOpt, Debug, Clone)]
@@ -94,19 +96,31 @@ pub fn agent(url: &str) -> Result<Agent, ic_agent::AgentError> {
     })
 }
 
+fn nat_ceil(n:&Nat) -> u32 {
+    unimplemented!()
+}
+
+fn int_ceil(n:&Int) -> i32 {
+    unimplemented!()
+}
+
+fn byte_ceil(n:&Nat) -> u8 {
+    unimplemented!()
+}
+
 fn translate_color(c: &render::Color) -> sdl2::pixels::Color {
     match c {
-        (r, g, b) => sdl2::pixels::Color::RGB(*r as u8, *g as u8, *b as u8),
+        (r, g, b) => sdl2::pixels::Color::RGB(byte_ceil(r), byte_ceil(g), byte_ceil(b))
     }
 }
 
 fn translate_rect(pos: &render::Pos, r: &render::Rect) -> sdl2::rect::Rect {
     // todo -- clip the size of the rect dimension by the bound param
     sdl2::rect::Rect::new(
-        (pos.x + r.pos.x) as i32,
-        (pos.y + r.pos.y) as i32,
-        r.dim.width as u32,
-        r.dim.height as u32,
+        int_ceil(& Int(&pos.x.0 + &r.pos.x.0)),
+        int_ceil(& Int(&pos.y.0 + &r.pos.y.0)),
+        nat_ceil(& r.dim.width),
+        nat_ceil(& r.dim.height),
     )
 }
 
@@ -126,14 +140,21 @@ fn draw_rect<T: RenderTarget>(
             canvas.set_draw_color(c);
             canvas.fill_rect(r).unwrap();
         }
-        Fill::Open(c, 1) => {
+        Fill::Open(c, _) => {
             let r = translate_rect(pos, r);
             let c = translate_color(c);
             canvas.set_draw_color(c);
             canvas.draw_rect(r).unwrap();
         }
-        Fill::Open(_c, _) => unimplemented!(),
     }
+}
+
+pub fn nat_zero() -> Nat {
+    Nat(Zero::zero())
+}
+
+pub fn int_zero() -> Int {
+    Int(Zero::zero())
 }
 
 pub fn draw_elms<T: RenderTarget>(
@@ -146,7 +167,7 @@ pub fn draw_elms<T: RenderTarget>(
     draw_rect::<T>(
         canvas,
         &pos,
-        &render::Rect::new(0, 0, dim.width, dim.height),
+        &render::Rect::new(int_zero(), int_zero(), dim.width.clone(), dim.height.clone()),
         fill,
     );
     for elm in elms.iter() {
@@ -165,14 +186,16 @@ pub fn draw_elm<T: RenderTarget>(
     match &elm {
         &Elm::Node(node) => {
             let pos = render::Pos {
-                x: pos.x + node.rect.pos.x,
-                y: pos.y + node.rect.pos.y,
+                x: Int(&pos.x.0 + &node.rect.pos.x.0),
+                y: Int(&pos.y.0 + &node.rect.pos.y.0),
             };
             if false {
                 draw_rect::<T>(
                     canvas,
                     &pos,
-                    &render::Rect::new(0, 0, node.rect.dim.width, node.rect.dim.height),
+                    &render::Rect::new(int_zero(), int_zero(),
+                                       node.rect.dim.width.clone(),
+                                       node.rect.dim.height.clone()),
                     &node.fill,
                 );
             }
@@ -192,8 +215,8 @@ fn translate_system_event(event: SysEvent) -> Option<event::Event> {
             ..
         } => {
             let dim = render::Dim {
-                width: *w as usize,
-                height: *h as usize,
+                width: Nat::from(*w as u64),
+                height: Nat::from(*h as u64),
             };
             Some(event::Event::WindowSizeChange(dim))
         }
@@ -238,8 +261,8 @@ pub fn redraw<T: RenderTarget>(
     dim: &render::Dim,
     rr:&render::Result,
 ) -> Result<(), String> {
-    let pos = render::Pos { x: 0, y: 0 };
-    let fill = render::Fill::Closed((0, 0, 0));
+    let pos = render::Pos { x: int_zero(), y: int_zero() };
+    let fill = render::Fill::Closed((nat_zero(), nat_zero(), nat_zero()));
     match rr {
         render::Result::Ok(render::Out::Draw(ref elm)) => {
             draw_elm(canvas, &pos, dim, &fill, &elm)
@@ -310,13 +333,13 @@ pub fn do_canister_tick(cfg: &ConnectConfig) -> Result<render::Result, String> {
 pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
     use sdl2::event::EventType;
     let mut dim = render::Dim {
-        width: 1000,
-        height: 666,
+        width: Nat::from(1000),
+        height: Nat::from(666),
     };
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
     let window = video_subsystem
-        .window("thin-ic-agent", dim.width as u32, dim.height as u32)
+        .window("thin-ic-agent", nat_ceil(&dim.width), nat_ceil(&dim.height))
         .position_centered()
         .resizable()
         //.input_grabbed()

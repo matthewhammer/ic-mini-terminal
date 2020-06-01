@@ -20,7 +20,8 @@ delay = "0.1.0"
 #candid = "0.2.3"
 candid = { path = "/Users/matthew/dfn/candid/candid" }
 #candid_derive = { path = "/Users/matthew/dfn/candid/candid_derive" }
-
+num-bigint = "0.2.6"
+num-traits = "0.2.6"
 ic-agent = { path = "/Users/matthew/dfn/sdk/src/agent/rust" }
 
 [lib]

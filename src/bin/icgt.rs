@@ -30,7 +30,6 @@ use std::io;
 use std::time::Duration;
 use ic_agent::{Agent, AgentConfig, Blob, CanisterId};
 use candid::{Nat, Int, IDLArgs};
-use num_traits::{Zero, One};
 use num_traits::cast::ToPrimitive;
 
 /// Internet Computer Game Terminal (icgt)
@@ -170,11 +169,11 @@ fn draw_rect<T: RenderTarget>(
 }
 
 pub fn nat_zero() -> Nat {
-    Nat(Zero::zero())
+    Nat::from(0)
 }
 
 pub fn int_zero() -> Int {
-    Int(Zero::zero())
+    Int::from(0)
 }
 
 pub fn draw_elms<T: RenderTarget>(
@@ -191,7 +190,7 @@ pub fn draw_elms<T: RenderTarget>(
         fill,
     );
     for elm in elms.iter() {
-        draw_elm(canvas, pos, dim, fill, elm)?
+        draw_elm(canvas, pos, elm)?
     }
     Ok(())
 }
@@ -199,8 +198,6 @@ pub fn draw_elms<T: RenderTarget>(
 pub fn draw_elm<T: RenderTarget>(
     canvas: &mut Canvas<T>,
     pos: &render::Pos,
-    dim: &render::Dim,
-    fill: &render::Fill,
     elm: &render::Elm,
 ) -> Result<(), String> {
     match &elm {
@@ -298,7 +295,6 @@ pub fn redraw<T: RenderTarget>(
 
 pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Result, String> {
     use ic_agent::{Blob, CanisterId};
-    use std::time::Duration;
     use tokio::runtime::Runtime;
     info!(
         "...to canister_id {:?} at replica_url {:?}",
@@ -314,6 +310,8 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
     let canister_id =
         CanisterId::from_text(cfg.canister_id.clone()).unwrap();
     let timestamp = std::time::SystemTime::now();
+    info!("server_call: {:?}", call);
+    info!("server_call: Awaiting response from server...");
     let blob_res = match call {
         ServerCall::WindowSizeChange(window_dim) => {
             runtime.block_on(agent.call_and_wait(
@@ -329,7 +327,7 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
                 if let Ok(args) = &args_str.parse::<IDLArgs>() {
                     args.clone()
                 } else {
-                    return Err(format!("do_server_call: failed to parse args: {:?}", args_str))
+                    return Err(format!("server_call: failed to parse args: {:?}", args_str))
                 }
             };
             runtime.block_on(agent.call_and_wait(
@@ -347,6 +345,7 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
         },
     };
     let elapsed = timestamp.elapsed().unwrap();
+    info!("server_call: elapsed {:?}", elapsed);
     if let Ok(blob_res) = blob_res {
         match Decode!(
             &(*blob_res.unwrap().0)
@@ -424,14 +423,17 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
             event::Event::Quit => {
                 return Ok(())
             },
+            event::Event::KeyDown(ref ke_info) => {
+                println!("to do: handle KeyDown: {:?}", ke_info.key);
+                println!("  ...doing Tick");
+                let rr: render::Result = server_call(cfg, &ServerCall::Tick)?;
+                redraw(&mut canvas, &window_dim, &rr)?;
+            },
             _ => {
-                println!("to do: handle: {:?}", event)
+                println!("to do: handle event: {:?}", event)
             }
         };
-        let rr: render::Result = server_call(cfg, &ServerCall::Tick)?;
-        redraw(&mut canvas, &window_dim, &rr)?;
-    };
-    Ok(())
+    }
 }
 
 fn main() {

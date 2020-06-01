@@ -295,8 +295,8 @@ pub fn redraw<T: RenderTarget>(
 
 pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Result, String> {
     use tokio::runtime::Runtime;
-    info!(
-        "...to canister_id {:?} at replica_url {:?}",
+    debug!(
+        "server_call: to canister_id {:?} at replica_url {:?}",
         cfg.canister_id,
         cfg.replica_url
     );

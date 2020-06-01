@@ -97,15 +97,33 @@ pub fn agent(url: &str) -> Result<Agent, ic_agent::AgentError> {
 }
 
 fn nat_ceil(n:&Nat) -> u32 {
-    unimplemented!()
+    if n.0 > Nat::from(u32::max_value() as u64).0 {
+        u32::max_value()
+    }
+    else {
+        // to do -- do this smarter/faster:
+        format!("{}", n.0).parse::<u32>().unwrap()
+    }
 }
 
 fn int_ceil(n:&Int) -> i32 {
-    unimplemented!()
+    if n.0 > Int::from(i32::max_value() as i64).0 {
+        i32::max_value()
+    }
+    else {
+        // to do -- do this smarter/faster:
+        format!("{}", n.0).parse::<i32>().unwrap()
+    }
 }
 
 fn byte_ceil(n:&Nat) -> u8 {
-    unimplemented!()
+    if n.0 > Nat::from(u8::max_value() as u64).0 {
+        u8::max_value()
+    }
+    else {
+        // to do -- do this smarter/faster:
+        format!("{}", n.0).parse::<u8>().unwrap()
+    }
 }
 
 fn translate_color(c: &render::Color) -> sdl2::pixels::Color {
@@ -199,7 +217,7 @@ pub fn draw_elm<T: RenderTarget>(
                     &node.fill,
                 );
             }
-            draw_elms(canvas, &pos, &node.rect.dim, &node.fill, &node.children)
+            draw_elms(canvas, &pos, &node.rect.dim, &node.fill, &node.elms)
         }
         &Elm::Rect(r, f) => {
             draw_rect(canvas, pos, r, f);
@@ -339,7 +357,7 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
     let window = video_subsystem
-        .window("thin-ic-agent", nat_ceil(&dim.width), nat_ceil(&dim.height))
+        .window("ic-game-terminal", nat_ceil(&dim.width), nat_ceil(&dim.height))
         .position_centered()
         .resizable()
         //.input_grabbed()

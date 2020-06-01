@@ -85,10 +85,9 @@ pub mod render {
     }
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub struct Node {
-        pub name: Name,
         pub rect: Rect,
         pub fill: Fill,
-        pub children: Elms,
+        pub elms: Elms,
     }
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Fill {
@@ -105,9 +104,10 @@ pub mod render {
         Rect(Rect, Fill),
         #[serde(rename(deserialize = "node"))]
         Node(Box<Node>),
+        // to do -- add Text case
     }
     pub type Elms = Vec<Elm>;
-    pub type NamedElms = Vec<(Name, Elm)>;
+    pub type NamedElms = Vec<(String, Elm)>;
 
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Out {

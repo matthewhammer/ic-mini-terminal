@@ -20,30 +20,24 @@ actor {
     drawWorld()
   };
 
-  func drawWorld() : Result.Result<Render.Out, Render.Out> {
-    func getRect(n:Nat) : Render.Rect = {
-      let fluff = if(n < 10){11 - n} else { 5 };
-      {
-        pos={x=0; y=0} : Render.Pos; // position ignored, we are using a flow layout
-        dim={width=20 - fluff;
-             height=fluff}
-      }
+  func fibTree(depth:Nat) : Render.Elm {
+    let r = Render.Render();
+    if (depth <= 2) {
+      r.rect({pos={x=0; y=0}; dim={width=10; height=10}}, #closed(255, 0, 255))
+    } else {
+      r.begin(#flow{dir=#right;interPad=5;intraPad=5;});
+      r.fill(#open((230, 0, 230), 1));
+      r.elm(fibTree(depth - 2));
+      r.elm(fibTree(depth - 1));
+      r.end();
     };
-    
-    func getFill(n:Nat) : Render.Fill = 
-      #closed((254 * (n % 3) + 1,
-               200 / ((n % 3) + 1),
-               if (n < 10) { 255 - (n * 5) } else { 200 }));
-    
+    r.getElm()
+  };
+
+  func drawWorld() : Result.Result<Render.Out, Render.Out> {
     let r = Render.Render();
     r.begin(#flow{dir=#right;interPad=5;intraPad=5;});
-    if (n > 0) {
-      for (i in I.range(0, n - 1)) {
-        r.rect(getRect i, getFill i)
-      };
-    } else {
-      r.text("0", textAtts())
-    };
+    r.elm(fibTree(n));
     r.end();
     #ok(#draw(r.getElm()))
   };
@@ -52,17 +46,5 @@ actor {
     Debug.print "tick";
     n := n + 1;
     drawWorld()
-  };
-
-  func textAtts() : Render.TextAtts = {
-    zoom=1;
-    fgFill=#none;
-    bgFill=#none;
-    glyphDim={width=5;height=5};
-    glyphFlow={
-      dir=#right;
-      interPad=2;
-      intraPad=1;
-    }
   };
 }

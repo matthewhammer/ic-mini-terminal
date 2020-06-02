@@ -360,6 +360,10 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
             },
             event::Event::KeyDown(ref ke_info) => {
                 info!("KeyDown {:?}", ke_info.key);
+                if ke_info.key == "LShift" || ke_info.key == "RShift" {
+                    info!("ignoring bare shift {:?}", ke_info.key);
+                    continue 'running
+                };
                 let rr: render::Result =
                     if ke_info.shift {
                         do_update = false;

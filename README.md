@@ -123,4 +123,4 @@ resends the buffer plus the new key, and does a real update via `updateKeyDown`.
 # Inspired by
 
  * Simple interactive graphics demos and games of [Elm lang](https://elm-lang.org/).
- * Fantasy console [PICO-8](https://www.lexaloffle.com/pico8_manual.txt).
+ * Fantasy console [PICO-8](https://www.lexaloffle.com/pico-8.php) ([PICO-8 Manual](https://www.lexaloffle.com/pico8_manual.txt)).

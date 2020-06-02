@@ -35,10 +35,26 @@ actor {
     drawWorld(state.count, false)
   };
 
+  func countOfKeys(n : Nat, keys : [KeyInfo]) : Nat {
+    var count = n;
+    for (key in keys.vals()) {
+      switch (key.key) {
+        case "ArrowLeft" { if (count > 1) { count -= 1 } };
+        case "ArrowRight" { count += 1 };
+        case _ { /* do nothing */ };
+      }
+    };
+    count
+  };
+
   func drawWorld(n : Nat, isQueryView : Bool) : Result.Result<Render.Out, Render.Out> {
     Debug.print ("drawWorld" # debug_show (n, isQueryView));
     let r = Render.Render();
-    r.fill(#closed((0, 0, 0)));
+    if isQueryView {
+      r.fill(#closed((0, 0, 0)));
+    } else {
+      r.fill(#closed((100, 0, 100)));
+    };
     r.begin(#flow{dir=#down;interPad=1;intraPad=1;});
     for (i in I.range(0, n)) {
       r.begin(#flow{dir=#down;interPad=1;intraPad=0;});
@@ -65,17 +81,18 @@ actor {
     #ok(#draw(r.getElm()))
   };
 
-  public func updateKeyDown( kes : [KeyInfo] ) : async Result.Result<Render.Out, Render.Out> {
+  public func updateKeyDown( keys : [KeyInfo] ) : async Result.Result<Render.Out, Render.Out> {
     Debug.print "updateKeyDown";
-    Debug.print (debug_show kes);
-    state.count += kes.len(); // update the mutable state
+    Debug.print (debug_show keys);
+    state.count := countOfKeys(state.count, keys); // update the mutable state (the counter)
     drawWorld(state.count, false)
   };
 
-  public query func queryKeyDown( kes : [KeyInfo] ) : async Result.Result<Render.Out, Render.Out> {
+  public query func queryKeyDown( keys : [KeyInfo] ) : async Result.Result<Render.Out, Render.Out> {
     Debug.print "queryKeyDown";
-    Debug.print (debug_show kes);
-    drawWorld(state.count + kes.len(), true) // draw the world as if we updated mutable state, but do not
+    Debug.print (debug_show keys);
+    let temp = countOfKeys(state.count, keys);
+    drawWorld(temp, true) // draw the world as if we updated mutable state, but do not save.
   };
 
   public func tick() : async Result.Result<Render.Out, Render.Out> {

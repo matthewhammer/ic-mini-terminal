@@ -107,10 +107,10 @@ The `updateKeyDown` and `queryKeyDown` messages are related, and the SHIFT key c
 
 * When the interactive user holds down SHIFT key, she **queries** the
 game server via `queryKeyDown` with a key buffer that expands with each new key press,
-and the test server re-runs the graphics processing for each key of
+and the server re-runs the graphics processing for each key of
 the buffer each time, and redraws.
 
-* Since it uses only a _query message_ to the server (not an _update_
+* Since it uses only a _query message_ to the game server (not an _update_
 message), this processing is repeated for each key (a quadratic
 expansion, in the limit), but it does not require consensus, so while
 redundant, the overall response time is about *ten times faster* than doing a real update to the server state.

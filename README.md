@@ -117,3 +117,10 @@ redundant, the overall response time is about *ten times faster* than doing a re
 
 * When the interactive user releases the SHIFT key, and then presses another key --- the terminal
 resends the buffer plus the new key, and does a real update via `updateKeyDown`.  Now the state change is saved.
+
+
+
+# Inspired by
+
+ * Simple interactive graphics demos and games of [Elm lang](https://elm-lang.org/).
+ * Fantasy console [PICO-8](https://www.lexaloffle.com/pico8_manual.txt).

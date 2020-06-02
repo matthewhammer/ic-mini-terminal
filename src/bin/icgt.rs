@@ -393,7 +393,8 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
     info!("Using SDL_Renderer \"{}\"", canvas.info().name);
 
     {
-        let rr: render::Result = server_call(cfg, &ServerCall::Tick)?;
+        let rr: render::Result =
+            server_call(cfg, &ServerCall::WindowSizeChange(window_dim.clone()))?;
         redraw(&mut canvas, &window_dim, &rr)?;
     }
 

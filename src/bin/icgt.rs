@@ -29,7 +29,7 @@ use sdl2::keyboard::Keycode;
 use std::io;
 use std::time::Duration;
 use ic_agent::{Agent, AgentConfig, Blob, CanisterId};
-use candid::{Nat, Int, IDLArgs};
+use candid::{Nat, Int};
 use num_traits::cast::ToPrimitive;
 
 /// Internet Computer Game Terminal (icgt)
@@ -209,7 +209,7 @@ pub fn draw_elm<T: RenderTarget>(
             draw_rect::<T>(
                 canvas,
                 &pos,
-                &render::Rect::new(int_zero(), int_zero(),
+                &render::Rect::new(pos.x.clone(), pos.y.clone(),
                                    node.rect.dim.width.clone(),
                                    node.rect.dim.height.clone()),
                 &node.fill,

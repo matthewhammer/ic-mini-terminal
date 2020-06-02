@@ -38,9 +38,13 @@ actor {
   func drawWorld(n : Nat) : Result.Result<Render.Out, Render.Out> {
     let r = Render.Render();
     r.fill(#closed((0, 0, 0)));
-    r.begin(#flow{dir=#right;interPad=1;intraPad=1;});
-    for (_ in I.range(0, n)) {
-      r.rect({pos={x=0;y=0};dim={width=10;height=10}}, #closed((200, 100, 50)))
+    r.begin(#flow{dir=#down;interPad=1;intraPad=1;});
+    for (i in I.range(0, n)) {
+      r.begin(#flow{dir=#down;interPad=1;intraPad=1;});
+      r.rect({pos={x=0;y=0};dim={width=10;height=10}}, #closed((200, 100, 50)));
+      r.elm(fibTree(windowDim.width - 10, i, true));
+      r.rect({pos={x=0;y=0};dim={width=10;height=10}}, #closed((50, 100, 200)));
+      r.end()
     };
     r.end();
     #ok(#draw(r.getElm()))
@@ -67,7 +71,7 @@ actor {
 
 
 
-  func fibTree(treeWidth:Nat, depth:Nat) : Render.Elm {
+  func fibTree(treeWidth:Nat, depth:Nat, bit:Bool) : Render.Elm {
     let r = Render.Render();
     r.begin(#none);
     if (depth <= 2) {
@@ -81,7 +85,7 @@ actor {
       r.rect({pos={x=0; y=0}; dim={width=treeWidth; height=4}}, #closed(100, 255, 100))
     } else {
       r.begin(#flow{dir=
-                    if (depth % 2 == 0) {
+                    if (bit) {
                       #down
                     } else {
                       #right
@@ -89,9 +93,9 @@ actor {
                     interPad=0;intraPad=0;
               });
       r.fill(#open((230, 0, 230), 1));
-      let w = treeWidth / 2;
-      r.elm(fibTree(w, depth - 2));
-      r.elm(fibTree(w, depth - 1));
+      let w = (treeWidth / 2);
+      r.elm(fibTree(w, depth - 2, bit));
+      r.elm(fibTree(w, depth - 1, not bit));
       r.end();
     };
     r.end();

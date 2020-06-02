@@ -47,19 +47,44 @@ expose this "game server" interface.
 
 ### Interact with game server
 
+The game server is a canister running on the replica.  It depends on the game terminal for a graphical output window, and for keyboard input.  Additionally, it (currently) relies on the terminal for a source of timing (clock) events, if needed.
 
-#### Keyboard input
-
-There are four messages sent from the terminal to the server:
+Each call to the game server yields a response that contains graphics to render:
 
 ```
-  tick : () -> async Res;
-  windowSizeChange : (dim : Render.Dim) -> async Res;
+  public type Res = Result.Result<Render.Out, Render.Out>;
+```
+
+There are three game terminal events that precipitate a server call:
+
+#### Window resizing
+
+Change the graphical window size of the terminal, and redraw the output:
+
+```
+windowSizeChange : (dim:Render.Dim) -> async Res
+```
+
+#### Time (external clock) advancing
+
+Advance time of the game server, and redraw:
+
+```
+tick : (duration:Nat) -> async Res
+```
+
+#### Keyboard input events
+
+Accept keyboard input events, and redraw:
+
+There are two messages sent from the terminal to the server for keyboard input:
+
+```
   updateKeyDown : (keys : KeyInfos) -> async Res;
   queryKeyDown : query (keys : KeyInfos) -> async Res;
 ```
 
-Several game server messages provide sequences of keyboard key presses:
+Each provides a sequences of keyboard key presses:
 
 ```
   type KeyInfo = {
@@ -70,14 +95,6 @@ Several game server messages provide sequences of keyboard key presses:
     shift: Bool
   };
   type KeyInfos = [KeyInfo];
-```
-
-#### Graphics output
-
-Each call to the game server yields a response that contains graphics to render:
-
-```
-  public type Res = Result.Result<Render.Out, Render.Out>;
 ```
 
 #### Event semantics and timing

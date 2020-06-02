@@ -122,5 +122,6 @@ resends the buffer plus the new key, and does a real update via `updateKeyDown`.
 
 # Inspired by
 
+ * [IC-Logo](https://github.com/chenyan2002/ic-logo): A toy [Logo](https://en.wikipedia.org/wiki/Logo_(programming_language))-like language for the Internet Computer.
  * Simple interactive graphics demos and games of [Elm lang](https://elm-lang.org/).
  * Fantasy console [PICO-8](https://www.lexaloffle.com/pico-8.php) ([PICO-8 Manual](https://www.lexaloffle.com/pico8_manual.txt)).

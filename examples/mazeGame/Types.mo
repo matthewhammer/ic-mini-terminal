@@ -4,6 +4,14 @@ import Render "mo:redraw/Render";
 
 module {
 
+public type KeyInfo = {
+  key : Text;
+  alt : Bool;
+  ctrl : Bool;
+  meta: Bool;
+  shift: Bool
+};
+
 public type Tile = {
   #void;
   #start;

@@ -4,11 +4,39 @@ import Render "mo:redraw/Render";
 import Types "Types";
 
 module {
-  
+
   type State = Types.State;
   type Dir2D = Types.Dir2D;
   type Pos = Types.Pos;
   type Tile = Types.Tile;
+
+  public func clone(st:State) : State {
+    {
+      var keys = st.keys ;
+      var maze = st.maze ;
+      var pos = st.pos ;
+      var won = st.won ;
+    }
+  };
+
+  public func keyDown(st:State, key:Types.KeyInfo) {
+    let r = switch (key.key) {
+      case "ArrowLeft"  move(st, #left);
+      case "ArrowRight" move(st, #right);
+      case "ArrowUp"    move(st, #up);
+      case "ArrowDown"  move(st, #down);
+      case _  { #err(()) };
+    };
+    // ignore errors for now
+    switch r {
+    case (#ok) { };
+    case (#err) { };
+    }
+  };
+
+  public func keyDownSeq(st:State, keys:[Types.KeyInfo]) {
+    for (key in keys.vals()) { keyDown(st, key) };
+  };
 
   public func getTile(st:State, pos:Pos) : ?Tile {
     let room = st.maze.rooms[pos.room];
@@ -43,7 +71,7 @@ module {
 
   public func posEq(pos1:Pos, pos2:Pos) : Bool {
     pos1.room == pos2.room and
-    pos1.tile.0 == pos2.tile.0 and 
+    pos1.tile.0 == pos2.tile.0 and
     pos1.tile.1 == pos2.tile.1
   };
 
@@ -55,7 +83,7 @@ module {
       case null {
              #err(())
            };
-      case (?#floor) { 
+      case (?#floor) {
              st.pos := movePos(st.pos, dir);
              #ok(())
            };
@@ -68,10 +96,10 @@ module {
       case (?#lock(id)) {
              switch (st.keys) {
              case null { #err(()) };
-             case (?(_key, keys)) { 
+             case (?(_key, keys)) {
                     ignore updateNeighborTile(st, dir, #floor);
                     // use last key; to do: search for matching keys by Id...
-                    st.keys := keys; 
+                    st.keys := keys;
                     st.pos := movePos(st.pos, dir);
                     #ok(())
                   };
@@ -103,7 +131,7 @@ module {
            };
     }
   };
-  
+
   public func movePos(pos:Pos, dir:Dir2D) : Pos {
     let (xPos, yPos) = (pos.tile.0, pos.tile.1);
     let newTilePos = switch dir {
@@ -125,7 +153,7 @@ module {
     };
     #ok(())
   };
-  
+
   public func initState() : Types.State {
     // tile palette for example maze
     let x = #void;
@@ -139,7 +167,7 @@ module {
 
     let startPos = { room = 0;
                      tile = (1, 1) };
-    
+
     let p1 : Tile = #outward{room=1;tile=(4, 1)};
     let room0Tiles : [[ var Tile ]] = [
       [ var x, w, x, x, x ],
@@ -170,17 +198,17 @@ module {
       [ var w, k, w, x,  w, w, l, w,  f, f, f, w ],
       [ var w, l, w, x,  w, l, f, w,  w, f, f, w ],
       [ var w, l, w, x,  w, l, l, w,  x, w, f, w ],
-      [ var w, l, w, w,  w, l, f, w,  x, w, f, w ],      
+      [ var w, l, w, w,  w, l, f, w,  x, w, f, w ],
       [ var w, f, f, f,  l, f, f, w,  w, f, f, w ],
       [ var w, f, w, w,  w, w, f, w,  k, k, f, w ],
       [ var w, f, k, w,  k, k, f, w,  k, k, f, w ],
-      [ var x, w, w, w,  w, w, w, x,  w, w, w, x ],            
+      [ var x, w, w, w,  w, w, w, x,  w, w, w, x ],
     ];
-    { 
+    {
       var keys = List.nil<()>();
       var won = false;
       var pos = startPos;
-      var maze : Types.Maze = 
+      var maze : Types.Maze =
         {
           start = startPos;
           rooms = [
@@ -198,7 +226,7 @@ module {
               width=12;
               height=13;
               tiles=room2Tiles;
-            }   
+            }
           ];
         }
     }

@@ -7,7 +7,21 @@ import P "mo:base/Prelude";
 
 actor {
 
-  var n = 1;
+  type KeyInfo = {
+    key : Text;
+    alt : Bool;
+    ctrl : Bool;
+    meta: Bool;
+    shift: Bool
+  };
+
+  type State = {
+    var count : Nat
+  };
+
+  var state : State = {
+    var count = 0;
+  };
 
   var windowDim : Render.Dim = {
     width = 100;
@@ -18,8 +32,40 @@ actor {
     Debug.print "windowSizeChange";
     Debug.print (debug_show dim);
     windowDim := dim;
-    drawWorld()
+    drawWorld(state.count)
   };
+
+  func drawWorld(n : Nat) : Result.Result<Render.Out, Render.Out> {
+    let r = Render.Render();
+    r.fill(#closed((0, 0, 0)));
+    r.begin(#flow{dir=#right;interPad=1;intraPad=1;});
+    for (_ in I.range(0, n)) {
+      r.rect({pos={x=0;y=0};dim={width=10;height=10}}, #closed((200, 100, 50)))
+    };
+    r.end();
+    #ok(#draw(r.getElm()))
+  };
+
+  public func updateKeyDown( kes : [KeyInfo] ) : async Result.Result<Render.Out, Render.Out> {
+    Debug.print "updateKeyDown";
+    Debug.print (debug_show kes);
+    state.count += kes.len(); // update the mutable state
+    drawWorld(state.count)
+  };
+
+  public query func queryKeyDown( kes : [KeyInfo] ) : async Result.Result<Render.Out, Render.Out> {
+    Debug.print "queryKeyDown";
+    Debug.print (debug_show kes);
+    drawWorld(state.count + kes.len()) // draw the world as if we updated mutable state, but do not
+  };
+
+  public func tick() : async Result.Result<Render.Out, Render.Out> {
+    Debug.print "tick";
+    state.count += 1;
+    drawWorld(state.count)
+  };
+
+
 
   func fibTree(treeWidth:Nat, depth:Nat) : Render.Elm {
     let r = Render.Render();
@@ -52,20 +98,4 @@ actor {
     r.getElm()
   };
 
-  func drawWorld() : Result.Result<Render.Out, Render.Out> {
-    let r = Render.Render();
-    r.fill(#closed((0, 0, 0)));
-    r.begin(#flow{dir=#right;interPad=1;intraPad=1;});
-    for (_ in I.range(0, n)) {
-      r.elm(fibTree(windowDim.width / 13, 13));
-    };
-    r.end();
-    #ok(#draw(r.getElm()))
-  };
-
-  public func tick() : async Result.Result<Render.Out, Render.Out> {
-    Debug.print "tick";
-    n := n + 1;
-    drawWorld()
-  };
 }

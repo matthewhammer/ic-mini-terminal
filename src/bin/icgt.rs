@@ -49,6 +49,23 @@ pub struct CliOpt {
     command: CliCommand,
 }
 
+#[derive(StructOpt, Debug, Clone)]
+enum CliCommand {
+    #[structopt(
+        name = "completions",
+        about = "Generate shell scripts for auto-completions."
+    )]
+    Completions { shell: Shell },
+    #[structopt(
+        name = "connect",
+        about = "Connect to a canister as an IC game server."
+    )]
+    Connect {
+        replica_url: String,
+        canister_id: String
+    },
+}
+
 /// Connection configuration
 #[derive(Debug, Clone)]
 pub struct ConnectConfig {
@@ -66,28 +83,11 @@ pub enum ServerCall {
 
     WindowSizeChange(render::Dim),
 
-    // to do -- more generally, proj events
-    ProjKeyDown(Vec<event::KeyEventInfo>),
+    // to do -- more generally, query msg that projects events' outcome
+    QueryKeyDown(Vec<event::KeyEventInfo>),
 
-    // to do -- more generally, push events
-    PushKeyDown(Vec<event::KeyEventInfo>),
-}
-
-#[derive(StructOpt, Debug, Clone)]
-enum CliCommand {
-    #[structopt(
-        name = "completions",
-        about = "Generate shell scripts for auto-completions."
-    )]
-    Completions { shell: Shell },
-    #[structopt(
-        name = "connect",
-        about = "Connect to a canister as an IC game server."
-    )]
-    Connect {
-        replica_url: String,
-        canister_id: String
-    },
+    // to do -- more generally, update msg that pushes events
+    UpdateKeyDown(Vec<event::KeyEventInfo>),
 }
 
 fn init_log(level_filter: log::LevelFilter) {
@@ -206,16 +206,14 @@ pub fn draw_elm<T: RenderTarget>(
                 x: Int(&pos.x.0 + &node.rect.pos.x.0),
                 y: Int(&pos.y.0 + &node.rect.pos.y.0),
             };
-            if false {
-                draw_rect::<T>(
-                    canvas,
-                    &pos,
-                    &render::Rect::new(int_zero(), int_zero(),
-                                       node.rect.dim.width.clone(),
-                                       node.rect.dim.height.clone()),
-                    &node.fill,
-                );
-            }
+            draw_rect::<T>(
+                canvas,
+                &pos,
+                &render::Rect::new(int_zero(), int_zero(),
+                                   node.rect.dim.width.clone(),
+                                   node.rect.dim.height.clone()),
+                &node.fill,
+            );
             draw_elms(canvas, &pos, &node.rect.dim, &node.fill, &node.elms)
         }
         &Elm::Rect(r, f) => {
@@ -244,6 +242,7 @@ fn translate_system_event(event: SysEvent) -> Option<event::Event> {
         } => Some(event::Event::Quit),
         SysEvent::KeyDown {
             keycode: Some(ref kc),
+            keymod,
             ..
         } => {
             let key = match &kc {
@@ -255,6 +254,7 @@ fn translate_system_event(event: SysEvent) -> Option<event::Event> {
                 Keycode::Up => "ArrowUp".to_string(),
                 Keycode::Down => "ArrowDown".to_string(),
                 Keycode::Backspace => "Backspace".to_string(),
+                Keycode::LShift => "LShift".to_string(),
                 keycode => format!("unrecognized({:?})", keycode),
             };
             let event = event::Event::KeyDown(event::KeyEventInfo {
@@ -263,7 +263,8 @@ fn translate_system_event(event: SysEvent) -> Option<event::Event> {
                 alt: false,
                 ctrl: false,
                 meta: false,
-                shift: false,
+                shift: keymod.contains(sdl2::keyboard::Mod::LSHIFTMOD) ||
+                    keymod.contains(sdl2::keyboard::Mod::RSHIFTMOD),
             });
             Some(event)
         }
@@ -293,79 +294,10 @@ pub fn redraw<T: RenderTarget>(
     Ok(())
 }
 
-pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Result, String> {
-    use tokio::runtime::Runtime;
-    debug!(
-        "server_call: to canister_id {:?} at replica_url {:?}",
-        cfg.canister_id,
-        cfg.replica_url
-    );
-    let mut runtime = Runtime::new().expect("Unable to create a runtime");
-    let delay = Delay::builder()
-        .throttle(RETRY_PAUSE)
-        .timeout(REQUEST_TIMEOUT)
-        .build();
-    let agent = agent(&cfg.replica_url).unwrap();
-    let canister_id =
-        CanisterId::from_text(cfg.canister_id.clone()).unwrap();
-    let timestamp = std::time::SystemTime::now();
-    info!("server_call: {:?}", call);
-    info!("server_call: Awaiting response from server...");
-    let blob_res = match call {
-        ServerCall::WindowSizeChange(window_dim) => {
-            runtime.block_on(agent.call_and_wait(
-                &canister_id,
-                &"windowSizeChange",
-                &Blob(Encode!(window_dim).unwrap()),
-                delay,
-            ))
-        }
-        ServerCall::Tick => {
-            let args_str = "()";
-            let args = {
-                if let Ok(args) = &args_str.parse::<IDLArgs>() {
-                    args.clone()
-                } else {
-                    return Err(format!("server_call: failed to parse args: {:?}", args_str))
-                }
-            };
-            runtime.block_on(agent.call_and_wait(
-                &canister_id,
-                &"tick",
-                &Blob(args.to_bytes().unwrap()),
-                delay,
-            ))
-        },
-        ServerCall::ProjKeyDown(_keys) => {
-            unimplemented!()
-        },
-        ServerCall::PushKeyDown(_keys) => {
-            unimplemented!()
-        },
-    };
-    let elapsed = timestamp.elapsed().unwrap();
-    info!("server_call: elapsed {:?}", elapsed);
-    if let Ok(blob_res) = blob_res {
-        match Decode!(
-            &(*blob_res.unwrap().0)
-                //blob_res
-                , render::Result) {
-            Ok(res) => {
-                Ok(res)
-            },
-            Err(candid_err) => {
-                Err(format!("Candid decoding error: {:?}", candid_err))
-            }
-        }
-    } else {
-        let res = format!("{:?}", blob_res);
-        info!("..error result {:?}", res);
-        Err(format!("do_canister_tick() failed: {:?}", res))
-    }
-}
-
 pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
     use sdl2::event::EventType;
+    let mut do_update = true;
+    let mut key_infos = vec![];
     let mut window_dim = render::Dim {
         width: Nat::from(1000),
         height: Nat::from(666),
@@ -423,16 +355,102 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
             event::Event::Quit => {
                 return Ok(())
             },
+            event::Event::KeyUp(ref ke_info) => {
+                info!("KeyUp {:?}", ke_info.key)
+            },
             event::Event::KeyDown(ref ke_info) => {
-                println!("to do: handle KeyDown: {:?}", ke_info.key);
-                println!("  ...doing Tick");
-                let rr: render::Result = server_call(cfg, &ServerCall::Tick)?;
+                info!("KeyDown {:?}", ke_info.key);
+                let rr: render::Result =
+                    if ke_info.shift {
+                        do_update = false;
+                        key_infos.push(ke_info.clone());
+                        server_call(cfg, &ServerCall::QueryKeyDown(key_infos.clone()))?
+                    } else {
+                        if do_update == false {
+                            do_update = true;
+                            key_infos.push(ke_info.clone());
+                            let rr = server_call(cfg, &ServerCall::UpdateKeyDown(key_infos.clone()))?;
+                            key_infos = vec![];
+                            rr
+                        } else {
+                            server_call(cfg, &ServerCall::UpdateKeyDown(vec![ke_info.clone()]))?
+                        }
+                    };
                 redraw(&mut canvas, &window_dim, &rr)?;
             },
-            _ => {
-                println!("to do: handle event: {:?}", event)
-            }
         };
+    }
+}
+
+pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Result, String> {
+    use tokio::runtime::Runtime;
+    debug!(
+        "server_call: to canister_id {:?} at replica_url {:?}",
+        cfg.canister_id,
+        cfg.replica_url
+    );
+    let mut runtime = Runtime::new().expect("Unable to create a runtime");
+    let delay = Delay::builder()
+        .throttle(RETRY_PAUSE)
+        .timeout(REQUEST_TIMEOUT)
+        .build();
+    let agent = agent(&cfg.replica_url).unwrap();
+    let canister_id =
+        CanisterId::from_text(cfg.canister_id.clone()).unwrap();
+    let timestamp = std::time::SystemTime::now();
+    info!("server_call: {:?}", call);
+    info!("server_call: Awaiting response from server...");
+    let blob_res = match call {
+        ServerCall::Tick => {
+            runtime.block_on(agent.call_and_wait(
+                &canister_id,
+                &"tick",
+                &Blob(Encode!(&()).unwrap()),
+                delay,
+            ))
+        },
+        ServerCall::WindowSizeChange(window_dim) => {
+            runtime.block_on(agent.call_and_wait(
+                &canister_id,
+                &"windowSizeChange",
+                &Blob(Encode!(window_dim).unwrap()),
+                delay,
+            ))
+        }
+        ServerCall::QueryKeyDown(keys) => {
+            Ok(Some(runtime.block_on(agent.query(
+                &canister_id,
+                &"queryKeyDown",
+                &Blob(Encode!(keys).unwrap()),
+            )).unwrap()))
+        },
+        ServerCall::UpdateKeyDown(keys) => {
+            runtime.block_on(agent.call_and_wait(
+                &canister_id,
+                &"updateKeyDown",
+                &Blob(Encode!(keys).unwrap()),
+                delay,
+            ))
+        },
+    };
+    let elapsed = timestamp.elapsed().unwrap();
+    info!("server_call: elapsed {:?}", elapsed);
+    if let Ok(blob_res) = blob_res {
+        match Decode!(
+            &(*blob_res.unwrap().0)
+                //blob_res
+                , render::Result) {
+            Ok(res) => {
+                Ok(res)
+            },
+            Err(candid_err) => {
+                Err(format!("Candid decoding error: {:?}", candid_err))
+            }
+        }
+    } else {
+        let res = format!("{:?}", blob_res);
+        info!("..error result {:?}", res);
+        Err(format!("do_canister_tick() failed: {:?}", res))
     }
 }
 

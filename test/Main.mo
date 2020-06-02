@@ -70,7 +70,7 @@ actor {
   };
 
 
-
+  // this doesn't quite do what I want yet; not sure if the issue is here, or in Render.
   func fibTree(treeWidth:Nat, depth:Nat, bit:Bool) : Render.Elm {
     let r = Render.Render();
     r.begin(#none);

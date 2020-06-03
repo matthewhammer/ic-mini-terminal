@@ -212,6 +212,10 @@ pub fn draw_elm<T: RenderTarget>(
             draw_rect(canvas, pos, r, f);
             Ok(())
         }
+        &Elm::Text(t, ta) => {
+            warn!("to do {:?} {:?}", t, ta);
+            Ok(())
+        }
     }
 }
 
@@ -277,6 +281,13 @@ pub fn redraw<T: RenderTarget>(
     match rr {
         render::Result::Ok(render::Out::Draw(elm)) => {
             draw_rect_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
+        },
+        render::Result::Ok(render::Out::Redraw(elms)) => {
+            if elms.len() == 1 && elms[0].0 == "screen" {
+                draw_rect_elms(canvas, &pos, dim, &fill, &vec![elms[0].1.clone()])?;
+            } else {
+                warn!("unrecognized redraw elements {:?}", elms);
+            }
         },
         render::Result::Err(render::Out::Draw(elm)) => {
             draw_rect_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;

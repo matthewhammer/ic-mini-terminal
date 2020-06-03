@@ -9,6 +9,18 @@ pub mod lang {
     use candid::{CandidType, Deserialize};
 
     #[derive(Debug, Clone, CandidType, Deserialize, Eq, PartialEq, Hash)]
+    pub enum Dir2D {
+        #[serde(rename(deserialize = "up"))]
+        Up,
+        #[serde(rename(deserialize = "down"))]
+        Down,
+        #[serde(rename(deserialize = "left"))]
+        Left,
+        #[serde(rename(deserialize = "right"))]
+        Right,
+    }
+
+    #[derive(Debug, Clone, CandidType, Deserialize, Eq, PartialEq, Hash)]
     pub enum Name {
         Void,
         Atom(Atom),
@@ -104,10 +116,32 @@ pub mod render {
         Rect(Rect, Fill),
         #[serde(rename(deserialize = "node"))]
         Node(Box<Node>),
-        // to do -- add Text case
+        #[serde(rename(deserialize = "text"))]
+        Text(String, TextAtts),
     }
     pub type Elms = Vec<Elm>;
     pub type NamedElms = Vec<(String, Elm)>;
+
+    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
+    pub struct TextAtts {
+        pub zoom: Nat,
+        #[serde(rename(deserialize = "fgFill"))]
+        pub fg_fill: Fill,
+        #[serde(rename(deserialize = "bgFill"))]
+        pub bg_fill: Fill,
+        #[serde(rename(deserialize = "glyphDim"))]
+        pub glyph_dim: Dim,
+        #[serde(rename(deserialize = "glyphFlow"))]
+        pub glyph_flow: FlowAtts,
+    }
+    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
+    pub struct FlowAtts {
+        pub dir: super::lang::Dir2D,
+        #[serde(rename(deserialize = "intraPad"))]
+        pub intra_pad: Nat,
+        #[serde(rename(deserialize = "interPad"))]
+        pub inter_pad: Nat,
+    }
 
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Out {

@@ -69,7 +69,7 @@ Change the graphical window size of the terminal, and redraw the output:
 windowSizeChange : (dim:Render.Dim) -> async Res
 ```
 
-#### Time (external clock) advancing
+#### 🕒 Time (external clock) advancing
 
 Advance time of the game server, and redraw:
 

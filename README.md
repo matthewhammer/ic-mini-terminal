@@ -84,21 +84,21 @@ Accept keyboard input events, and redraw:
 There are two messages sent from the terminal to the server for keyboard input:
 
 ```
-  updateKeyDown : (keys : KeyInfos) -> async Res;
-  queryKeyDown : query (keys : KeyInfos) -> async Res;
+  updateKeyDown : (keys : Keys) -> async Res;
+  queryKeyDown : query (keys : Keys) -> async Res;
 ```
 
 Each provides a sequences of keyboard key presses:
 
 ```
-  type KeyInfo = {
+  type Key = {
     key : Text;
     alt : Bool;
     ctrl : Bool;
     meta: Bool;
     shift: Bool
   };
-  type KeyInfos = [KeyInfo];
+  type Keys = [Key];
 ```
 
 #### Event semantics and timing

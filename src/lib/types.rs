@@ -8,6 +8,20 @@ pub mod lang {
     //use hashcons::merkle::Merkle;
     use candid::{CandidType, Deserialize};
 
+    #[derive(Debug, Clone, CandidType, Deserialize, Hash)]
+    pub enum Dir1D {
+        Forward,
+        Backward,
+    }
+
+    #[derive(Debug, Clone, CandidType, Deserialize, Hash)]
+    pub enum Dir2D {
+        Up,
+        Down,
+        Left,
+        Right,
+    }
+
     #[derive(Debug, Clone, CandidType, Deserialize, Eq, PartialEq, Hash)]
     pub enum Name {
         Void,

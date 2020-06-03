@@ -6,3 +6,4 @@ extern crate candid;
 //extern crate candid_derive;
 
 pub mod types;
+pub mod render;

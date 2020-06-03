@@ -1,6 +1,6 @@
 # IC Game Terminal
 
-Simple keyboard input and graphical output for the Internet Computer.
+Simple keyboard input (⌨) and graphical output (📺) for the Internet Computer.
 
 For playing games, viewing graphics and more.
 

@@ -29,7 +29,7 @@ use sdl2::keyboard::Keycode;
 use std::io;
 use std::time::Duration;
 use ic_agent::{Agent, AgentConfig, Blob, CanisterId};
-use candid::{Nat, Int, IDLArgs};
+use candid::{Nat, Int};
 use num_traits::cast::ToPrimitive;
 
 /// Internet Computer Game Terminal (icgt)
@@ -176,7 +176,7 @@ pub fn int_zero() -> Int {
     Int::from(0)
 }
 
-pub fn draw_elms<T: RenderTarget>(
+pub fn draw_rect_elms<T: RenderTarget>(
     canvas: &mut Canvas<T>,
     pos: &render::Pos,
     dim: &render::Dim,
@@ -206,15 +206,7 @@ pub fn draw_elm<T: RenderTarget>(
                 x: Int(&pos.x.0 + &node.rect.pos.x.0),
                 y: Int(&pos.y.0 + &node.rect.pos.y.0),
             };
-            draw_rect::<T>(
-                canvas,
-                &pos,
-                &render::Rect::new(int_zero(), int_zero(),
-                                   node.rect.dim.width.clone(),
-                                   node.rect.dim.height.clone()),
-                &node.fill,
-            );
-            draw_elms(canvas, &pos, &node.rect.dim, &node.fill, &node.elms)
+            draw_rect_elms(canvas, &pos, &node.rect.dim, &node.fill, &node.elms)
         }
         &Elm::Rect(r, f) => {
             draw_rect(canvas, pos, r, f);
@@ -255,7 +247,10 @@ fn translate_system_event(event: SysEvent) -> Option<event::Event> {
                 Keycode::Down => "ArrowDown".to_string(),
                 Keycode::Backspace => "Backspace".to_string(),
                 Keycode::LShift => "LShift".to_string(),
-                keycode => format!("unrecognized({:?})", keycode),
+                keycode => {
+                    info!("Unrecognized key code, ignoring event: {:?}", keycode);
+                    return None
+                }
             };
             let event = event::Event::KeyDown(event::KeyEventInfo {
                 key: key,
@@ -281,10 +276,10 @@ pub fn redraw<T: RenderTarget>(
     let fill = render::Fill::Closed((nat_zero(), nat_zero(), nat_zero()));
     match rr {
         render::Result::Ok(render::Out::Draw(elm)) => {
-            draw_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
+            draw_rect_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
         },
         render::Result::Err(render::Out::Draw(elm)) => {
-            draw_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
+            draw_rect_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
         },
         _ => {
             unimplemented!()
@@ -346,6 +341,7 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
         // catch window resize event: redraw and loop:
         match event {
             event::Event::WindowSizeChange(new_dim) => {
+                debug!("WindowSizeChange {:?}", new_dim);
                 let rr: render::Result =
                     server_call(cfg, &ServerCall::WindowSizeChange(new_dim.clone()))?;
                 window_dim = new_dim;
@@ -353,15 +349,16 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
                 continue 'running;
             },
             event::Event::Quit => {
+                debug!("Quit");
                 return Ok(())
             },
             event::Event::KeyUp(ref ke_info) => {
-                info!("KeyUp {:?}", ke_info.key)
+                debug!("KeyUp {:?}", ke_info.key)
             },
             event::Event::KeyDown(ref ke_info) => {
-                info!("KeyDown {:?}", ke_info.key);
+                debug!("KeyDown {:?}", ke_info.key);
                 if ke_info.key == "LShift" || ke_info.key == "RShift" {
-                    info!("ignoring bare shift {:?}", ke_info.key);
+                    debug!("ignoring bare shift {:?}", ke_info.key);
                     continue 'running
                 };
                 let rr: render::Result =
@@ -403,48 +400,62 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
         CanisterId::from_text(cfg.canister_id.clone()).unwrap();
     let timestamp = std::time::SystemTime::now();
     info!("server_call: {:?}", call);
+    let arg_bytes = match call {
+        ServerCall::Tick => { Encode!(&()).unwrap() }
+        ServerCall::WindowSizeChange(window_dim) => { Encode!(window_dim).unwrap() }
+        ServerCall::QueryKeyDown(keys) => { Encode!(keys).unwrap() }
+        ServerCall::UpdateKeyDown(keys) => { Encode!(keys).unwrap() }
+    };
+    info!("server_call: Encoded argument via Candid; Arg size {:?} bytes", arg_bytes.len());
     info!("server_call: Awaiting response from server...");
+    // do an update or query call, based on the ServerCall case:
     let blob_res = match call {
         ServerCall::Tick => {
             runtime.block_on(agent.call_and_wait(
                 &canister_id,
                 &"tick",
-                &Blob(Encode!(&()).unwrap()),
+                &Blob(arg_bytes),
                 delay,
             ))
         },
-        ServerCall::WindowSizeChange(window_dim) => {
+        ServerCall::WindowSizeChange(_window_dim) => {
             runtime.block_on(agent.call_and_wait(
                 &canister_id,
                 &"windowSizeChange",
-                &Blob(Encode!(window_dim).unwrap()),
+                &Blob(arg_bytes),
                 delay,
             ))
         }
-        ServerCall::QueryKeyDown(keys) => {
+        ServerCall::QueryKeyDown(_keys) => {
             Ok(Some(runtime.block_on(agent.query(
                 &canister_id,
                 &"queryKeyDown",
-                &Blob(Encode!(keys).unwrap()),
+                &Blob(arg_bytes),
             )).unwrap()))
         },
-        ServerCall::UpdateKeyDown(keys) => {
+        ServerCall::UpdateKeyDown(_keys) => {
             runtime.block_on(agent.call_and_wait(
                 &canister_id,
                 &"updateKeyDown",
-                &Blob(Encode!(keys).unwrap()),
+                &Blob(arg_bytes),
                 delay,
             ))
         },
     };
     let elapsed = timestamp.elapsed().unwrap();
-    info!("server_call: elapsed {:?}", elapsed);
-    if let Ok(blob_res) = blob_res {
-        match Decode!(
-            &(*blob_res.unwrap().0)
-                //blob_res
-                , render::Result) {
+    if let Ok(Some(blob_res)) = blob_res {
+        info!("server_call: Ok: Response size {:?} bytes; elapsed time {:?}", 
+              blob_res.0.len(), elapsed);
+        match Decode!(&(*blob_res.0), render::Result) {
             Ok(res) => {
+                if false {
+                    let mut res_log = format!("{:?}", &res);
+                    if res_log.len() > 80 {
+                        res_log.truncate(80);
+                        res_log.push_str("...(truncated)");
+                    }
+                    info!("server_call: Successful decoding of graphics output: {:?}", res_log);
+                }
                 Ok(res)
             },
             Err(candid_err) => {
@@ -469,7 +480,6 @@ fn main() {
         },
     );
     info!("Evaluating CLI command: {:?} ...", &cli_opt.command);
-    // - - - - - - - - - - -
     let c = cli_opt.command.clone();
     match c {
         CliCommand::Completions { shell: s } => {

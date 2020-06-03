@@ -1,6 +1,6 @@
 # IC Game Terminal
 
-Simple keyboard input and graphical output for the Internet Computer.
+Simple keyboard input (⌨) and graphical output (📺) for the Internet Computer.
 
 For playing games, viewing graphics and more.
 
@@ -49,15 +49,19 @@ expose this "game server" interface.
 
 The game server is a canister running on the replica.  It depends on the game terminal for a graphical output window, and for keyboard input.  Additionally, it (currently) relies on the terminal for a source of timing (clock) events, if needed.
 
+### 📺 Graphical output format
+
 Each call to the game server yields a response that contains graphics to render:
 
 ```
   public type Res = Result.Result<Render.Out, Render.Out>;
 ```
 
+The `Render.Out` type represents simple graphics sent from the game server to the terminal, currently defined by [`motoko-redraw`](https://github.com/matthewhammer/motoko-redraw).
+
 There are three game terminal events that precipitate a server call:
 
-#### Window resizing
+#### 📺 Window resizing
 
 Change the graphical window size of the terminal, and redraw the output:
 
@@ -73,7 +77,7 @@ Advance time of the game server, and redraw:
 tick : (duration:Nat) -> async Res
 ```
 
-#### Keyboard input events
+#### ⌨ Keyboard input events
 
 Accept keyboard input events, and redraw:
 

@@ -49,7 +49,7 @@ expose this "game server" interface.
 
 The game server is a canister running on the replica.  It depends on the game terminal for a graphical output window, and for keyboard input.  Additionally, it (currently) relies on the terminal for a source of timing (clock) events, if needed.
 
-### 📺 Graphical output format
+#### 📺 Graphical output format
 
 Each call to the game server yields a response that contains graphics to render:
 

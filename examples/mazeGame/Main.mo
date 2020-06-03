@@ -28,7 +28,7 @@ actor {
     redrawScreen(gameState, #ok)
   };
 
-  public func queryKeyDown(keys:[Types.KeyInfo]) : async Types.ResOut {
+  public query func queryKeyDown(keys:[Types.KeyInfo]) : async Types.ResOut {
     Debug.print "queryKeyDown";
     let temp = State.clone(gameState);
     State.keyDownSeq(temp, keys);

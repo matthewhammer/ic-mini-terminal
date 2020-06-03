@@ -484,13 +484,10 @@ fn main() {
     match c {
         CliCommand::Completions { shell: s } => {
             // see also: https://clap.rs/effortless-auto-completion/
-            //
             CliOpt::clap().gen_completions_to("icgt", s, &mut io::stdout());
             info!("done")
         },
         CliCommand::Connect { canister_id, replica_url } => {
-            // see also: https://clap.rs/effortless-auto-completion/
-            //
             let cfg = ConnectConfig{
                 canister_id,
                 replica_url,

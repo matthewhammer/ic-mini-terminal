@@ -58,20 +58,21 @@ actor {
     r.begin(#flow{dir=#down;interPad=1;intraPad=1;});
     for (i in I.range(0, n)) {
       r.begin(#flow{dir=#down;interPad=1;intraPad=0;});
-      r.rect({pos={x=0;y=0};dim={width=5;height=5}},
-             if isQueryView { #closed((200, 100, 50)) } else { #closed((100, 60, 20)) });
+      r.rect({pos={x=0;y=0};dim={width=5 + i;height=5 + i}},
+             if isQueryView { #open((200, 100, 50), 1) } else { #closed((100, 60, 20)) });
       r.begin(#flow{dir=#right;interPad=1;intraPad=0;});
       for (j in (I.range(0, n))) {
         let color = switch (j % 6) {
           case 0 (200, 100, 50);
           case 1 (200, 200, 20);
-          case 2 (200, 300, 10);
+          case 2 (200, 250, 10);
           case 3 (100, 100, 60);
           case 4 (100, 200, 70);
-          case _ (100, 300, 80);
+          case _ (100, 250, 80);
         };
-        let fill = if (i % 2 == 0) { #closed(color) } else { #open(color, 1) };
-        r.rect({pos={x=0;y=0};dim={width=3;height=3}}, fill);
+        let fill = if (isQueryView) { #closed(color) } else { #open(color, 1) };
+        r.rect({pos={x=0;y=0};dim={width=3 + i;height=3 + j}}, fill);
+        r.rect({pos={x=0;y=0};dim={width=3 + j;height=3 + i}}, fill);
       };
       r.end();
       r.rect({pos={x=0;y=0};dim={width=8;height=8}}, #closed((50, 100, 200)));

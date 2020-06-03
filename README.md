@@ -1,6 +1,6 @@
 # IC Game Terminal
 
-Simple keyboard input and graphical output for the Internet Computer.
+Simple keyboard input (⌨) and graphical output (📺) for the Internet Computer.
 
 For playing games, viewing graphics and more.
 
@@ -49,15 +49,19 @@ expose this "game server" interface.
 
 The game server is a canister running on the replica.  It depends on the game terminal for a graphical output window, and for keyboard input.  Additionally, it (currently) relies on the terminal for a source of timing (clock) events, if needed.
 
+### 📺 Graphical output format
+
 Each call to the game server yields a response that contains graphics to render:
 
 ```
   public type Res = Result.Result<Render.Out, Render.Out>;
 ```
 
+The `Render.Out` type represents simple graphics sent from the game server to the terminal, currently defined by [`motoko-redraw`](https://github.com/matthewhammer/motoko-redraw).
+
 There are three game terminal events that precipitate a server call:
 
-#### Window resizing
+#### 📺 Window resizing
 
 Change the graphical window size of the terminal, and redraw the output:
 
@@ -65,7 +69,7 @@ Change the graphical window size of the terminal, and redraw the output:
 windowSizeChange : (dim:Render.Dim) -> async Res
 ```
 
-#### Time (external clock) advancing
+#### 🕒 Time (external clock) advancing
 
 Advance time of the game server, and redraw:
 
@@ -73,7 +77,7 @@ Advance time of the game server, and redraw:
 tick : (duration:Nat) -> async Res
 ```
 
-#### Keyboard input events
+#### ⌨ Keyboard input events
 
 Accept keyboard input events, and redraw:
 
@@ -117,3 +121,11 @@ redundant, the overall response time is about *ten times faster* than doing a re
 
 * When the interactive user releases the SHIFT key, and then presses another key --- the terminal
 resends the buffer plus the new key, and does a real update via `updateKeyDown`.  Now the state change is saved.
+
+
+
+# Inspired by
+
+ * [IC-Logo](https://github.com/chenyan2002/ic-logo): A toy [Logo](https://en.wikipedia.org/wiki/Logo_(programming_language))-like language for the Internet Computer.
+ * Simple interactive graphics demos and games of [Elm lang](https://elm-lang.org/).
+ * Fantasy console [PICO-8](https://www.lexaloffle.com/pico-8.php) ([PICO-8 Manual](https://www.lexaloffle.com/pico8_manual.txt)).

@@ -23,8 +23,15 @@ actor {
   func render() : Render.Result {
     #ok(
       #draw(
-        #rect({pos={x=windowDim.width;y=windowDim.height};dim=windowDim}, 
-              #closed((100, 200, 100)))))
+        #rect({pos={
+                 x=windowDim.width / 4;
+                 y=windowDim.height / 4
+               };
+               dim={
+                 width=windowDim.width / 2;
+                 height=windowDim.height / 2;
+               }},
+              #closed((windowDim.width % 255, 200, windowDim.height % 255)))))
   };
 
   public func windowSizeChange(wdim:Render.Dim) : async Render.Result {

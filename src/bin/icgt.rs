@@ -131,7 +131,7 @@ fn translate_color(c: &render::Color) -> sdl2::pixels::Color {
 
 fn translate_rect(pos: &render::Pos, r: &render::Rect) -> sdl2::rect::Rect {
     // todo -- clip the size of the rect dimension by the bound param
-    info!("translate_rect {:?} {:?}", pos, r);
+    trace!("translate_rect {:?} {:?}", pos, r);
     sdl2::rect::Rect::new(
         nat_ceil(& Nat(&pos.x.0 + &r.pos.x.0)) as i32,
         nat_ceil(& Nat(&pos.y.0 + &r.pos.y.0)) as i32,

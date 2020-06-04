@@ -7,6 +7,9 @@
     "counter": {
       "main": "test/Counter.mo"
     },
+    "counter2d": {
+      "main": "test/Counter2D.mo"
+    },
     "grid": {
       "main": "test/Grid.mo"
     },

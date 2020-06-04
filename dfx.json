@@ -1,8 +1,14 @@
 
 {
   "canisters": {
-    "test": {
-      "main": "test/Main.mo"
+    "window": {
+      "main": "test/Window.mo"
+    },
+    "counter": {
+      "main": "test/Counter.mo"
+    },
+    "grid": {
+      "main": "test/Grid.mo"
     },
     "mazeGame": {
       "main": "examples/mazeGame/Main.mo"

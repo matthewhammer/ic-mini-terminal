@@ -1,7 +1,6 @@
 /// Types of data sent to and from the game server canister.
 
 pub type Nat = candid::Nat;
-pub type Int = candid::Int;
 
 pub mod lang {
     use super::Nat;
@@ -63,7 +62,7 @@ pub mod event {
 ///
 /// Information from Motoko canister logic to Rust graphics output (via SDL2).
 pub mod render {
-    use super::{Nat, Int};
+    use super::Nat;
     //use super::lang::Name;
     use candid::{CandidType, Deserialize};
 
@@ -76,8 +75,8 @@ pub mod render {
     }
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub struct Pos {
-        pub x: Int,
-        pub y: Int,
+        pub x: Nat,
+        pub y: Nat,
     }
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub struct Rect {
@@ -85,7 +84,7 @@ pub mod render {
         pub dim: Dim,
     }
     impl Rect {
-        pub fn new(x: Int, y: Int, w: Nat, h: Nat) -> Rect {
+        pub fn new(x: Nat, y: Nat, w: Nat, h: Nat) -> Rect {
             Rect {
                 pos: Pos { x, y },
                 dim: Dim {

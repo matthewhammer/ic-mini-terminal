@@ -29,7 +29,7 @@ use sdl2::keyboard::Keycode;
 use std::io;
 use std::time::Duration;
 use ic_agent::{Agent, AgentConfig, Blob, CanisterId};
-use candid::{Nat, Int};
+use candid::Nat;
 use num_traits::cast::ToPrimitive;
 
 /// Internet Computer Game Terminal (icgt)
@@ -116,10 +116,6 @@ fn nat_ceil(n:&Nat) -> u32 {
     n.0.to_u32().unwrap()
 }
 
-fn int_ceil(n:&Int) -> i32 {
-    n.0.to_i32().unwrap()
-}
-
 fn byte_ceil(n:&Nat) -> u8 {
     match n.0.to_u8() {
         Some(byte) => byte,
@@ -135,9 +131,10 @@ fn translate_color(c: &render::Color) -> sdl2::pixels::Color {
 
 fn translate_rect(pos: &render::Pos, r: &render::Rect) -> sdl2::rect::Rect {
     // todo -- clip the size of the rect dimension by the bound param
+    info!("translate_rect {:?} {:?}", pos, r);
     sdl2::rect::Rect::new(
-        int_ceil(& Int(&pos.x.0 + &r.pos.x.0)),
-        int_ceil(& Int(&pos.y.0 + &r.pos.y.0)),
+        nat_ceil(& Nat(&pos.x.0 + &r.pos.x.0)) as i32,
+        nat_ceil(& Nat(&pos.y.0 + &r.pos.y.0)) as i32,
         nat_ceil(& r.dim.width),
         nat_ceil(& r.dim.height),
     )
@@ -172,10 +169,6 @@ pub fn nat_zero() -> Nat {
     Nat::from(0)
 }
 
-pub fn int_zero() -> Int {
-    Int::from(0)
-}
-
 pub fn draw_rect_elms<T: RenderTarget>(
     canvas: &mut Canvas<T>,
     pos: &render::Pos,
@@ -186,7 +179,7 @@ pub fn draw_rect_elms<T: RenderTarget>(
     draw_rect::<T>(
         canvas,
         &pos,
-        &render::Rect::new(int_zero(), int_zero(), dim.width.clone(), dim.height.clone()),
+        &render::Rect::new(nat_zero(), nat_zero(), dim.width.clone(), dim.height.clone()),
         fill,
     );
     for elm in elms.iter() {
@@ -203,8 +196,8 @@ pub fn draw_elm<T: RenderTarget>(
     match &elm {
         &Elm::Node(node) => {
             let pos = render::Pos {
-                x: Int(&pos.x.0 + &node.rect.pos.x.0),
-                y: Int(&pos.y.0 + &node.rect.pos.y.0),
+                x: Nat(&pos.x.0 + &node.rect.pos.x.0),
+                y: Nat(&pos.y.0 + &node.rect.pos.y.0),
             };
             draw_rect_elms(canvas, &pos, &node.rect.dim, &node.fill, &node.elms)
         }
@@ -276,7 +269,7 @@ pub fn redraw<T: RenderTarget>(
     dim: &render::Dim,
     rr:&render::Result,
 ) -> Result<(), String> {
-    let pos = render::Pos { x: int_zero(), y: int_zero() };
+    let pos = render::Pos { x: nat_zero(), y: nat_zero() };
     let fill = render::Fill::Closed((nat_zero(), nat_zero(), nat_zero()));
     match rr {
         render::Result::Ok(render::Out::Draw(elm)) => {
@@ -459,10 +452,10 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
               blob_res.0.len(), elapsed);
         match Decode!(&(*blob_res.0), render::Result) {
             Ok(res) => {
-                if false {
+                if true {
                     let mut res_log = format!("{:?}", &res);
-                    if res_log.len() > 80 {
-                        res_log.truncate(80);
+                    if res_log.len() > 1000 {
+                        res_log.truncate(1000);
                         res_log.push_str("...(truncated)");
                     }
                     info!("server_call: Successful decoding of graphics output: {:?}", res_log);

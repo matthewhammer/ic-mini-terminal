@@ -4,6 +4,9 @@
     "window": {
       "main": "test/Window.mo"
     },
+    "fib": {
+      "main": "test/Fib.mo"
+    },
     "counter": {
       "main": "test/Counter.mo"
     },

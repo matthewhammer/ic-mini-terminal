@@ -7,7 +7,6 @@ import Render "mo:redraw/Render";
 
 actor {
 
-
   type KeyInfo = {
     key : Text;
     alt : Bool;

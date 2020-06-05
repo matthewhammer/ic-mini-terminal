@@ -31,7 +31,10 @@ actor {
                  width=windowDim.width / 2;
                  height=windowDim.height / 2;
                }},
-              #closed((windowDim.width % 255, 200, windowDim.height % 255)))))
+              #open((windowDim.width % 255, 200, windowDim.height % 255), 1)
+        )
+      )
+    )
   };
 
   public func windowSizeChange(wdim:Render.Dim) : async Render.Result {

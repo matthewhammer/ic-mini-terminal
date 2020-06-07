@@ -1,12 +1,12 @@
 import List "mo:base/List";
 import Result "mo:base/Result";
 import Render "mo:redraw/Render";
+import Mono5x5 "mo:redraw/glyph/Mono5x5";
 import Types "Types";
 
 module {
 
   type State = Types.State;
-  type TextAtts = Render.TextAtts;
 
   // Flow atts --------------------------------------------------------
 
@@ -28,55 +28,64 @@ module {
     intraPad=1;
   };
 
-  // Text atts --------------------------------------------------------
+  // Char/Text atts --------------------------------------------------------
 
-  func tileAtts(fg:Render.Fill, bg:Render.Fill) : TextAtts = {
+  type Atts = {
+    zoom:Nat;
+    fgFill:Render.Fill;
+    bgFill:Render.Fill
+  };
+
+  func attsFgBg(fg:Render.Fill, bg:Render.Fill) : Atts =
     {
       zoom=4;
       fgFill=fg;
       bgFill=bg;
-      glyphDim={width=5;height=5};
-      glyphFlow=horz;
-    }
-  };
+    };
 
-  func taLegend(fg:Render.Fill) : TextAtts = {
+  func attsLegendFg(fg:Render.Fill) : Atts =
     {
       zoom=2;
       fgFill=fg;
       bgFill=#closed((0, 0, 0));
-      glyphDim={width=5;height=5};
-      glyphFlow=textHorz;
-    }
-  };
+    };
 
-  func taLegendTextLo() : Render.TextAtts =
-    taLegend(#closed((180, 140, 190)));
-  
-  func taLegendTextHi() : Render.TextAtts =
-    taLegend(#closed((220, 200, 240)));
+  func attsLegendTextLo() : Atts =
+    attsLegendFg(#closed((180, 140, 190)));
 
-  func taTitleText() : Render.TextAtts =
-    taLegend(#closed((240, 200, 255)));
+  func attsLegendTextHi() : Atts =
+    attsLegendFg(#closed((220, 200, 240)));
 
-  // Fill names --------------------------------------------------------
+  func taTitleText() : Atts =
+    attsLegendFg(#closed((240, 200, 255)));
+
+  // Fill / Atts names --------------------------------------------------------
 
   func bgFill() : Render.Fill = #closed((50, 10, 50));
   func bgFillHi() : Render.Fill = #closed((150, 100, 150));
-  func taVoid() : TextAtts = tileAtts(#none, #none);
-  func taPlayer() : TextAtts = tileAtts(#closed((255, 255, 255)), bgFill());
-  func taStart() : TextAtts = tileAtts(#closed((255, 100, 255)), bgFill());
-  func taGoal() : TextAtts = tileAtts(#closed((255, 255, 255)), bgFillHi());
-  func taWall() : TextAtts = tileAtts(#closed((150, 100, 200)), bgFill());
-  func taFloor() : TextAtts = tileAtts(#closed((200, 100, 200)), bgFill());
-  func taLock() : TextAtts = tileAtts(#closed((200, 200, 100)), bgFill());
-  func taKey() : TextAtts = tileAtts(#closed((255, 255, 100)), bgFill());
+  func taVoid() : Atts = attsFgBg(#none, #none);
+  func taPlayer() : Atts = attsFgBg(#closed((255, 255, 255)), bgFill());
+  func taStart() : Atts = attsFgBg(#closed((255, 100, 255)), bgFill());
+  func taGoal() : Atts = attsFgBg(#closed((255, 255, 255)), bgFillHi());
+  func taWall() : Atts = attsFgBg(#closed((150, 100, 200)), bgFill());
+  func taFloor() : Atts = attsFgBg(#closed((200, 100, 200)), bgFill());
+  func taLock() : Atts = attsFgBg(#closed((200, 200, 100)), bgFill());
+  func taKey() : Atts = attsFgBg(#closed((255, 255, 100)), bgFill());
 
   // --------------------------------------------------------
 
   public func drawState(st:State) : Render.Elm {
 
     let r = Render.Render();
+    let cr = Render.CharRender(r, Mono5x5.bitmapOfChar,
+                        {
+                          zoom = 3;
+                          fgFill = #closed((255, 255, 255));
+                          bgFill = #closed((0, 0, 0));
+                          flow = horz
+                        });
+    let tr = Render.TextRender(cr);
+
     let room_tiles = st.maze.rooms[st.pos.room].tiles;
 
     r.begin(#flow(vert)); // Display begin
@@ -85,11 +94,11 @@ module {
     // Title line:
     if (st.won) {
       r.begin(#flow(horz));
-      r.text("MazeGame: Game over, You won!!", taTitleText());
+      tr.textAtts("mazegame: game over, you won!!", taTitleText());
       r.end();
     } else {
       r.begin(#flow(horz));
-      r.text("MazeGame in Motoko!", taTitleText());
+      tr.textAtts("mazegame in motoko!", taTitleText());
       r.end();
     };
 
@@ -99,46 +108,46 @@ module {
 
     r.begin(#flow(vert));
     r.begin(#flow(horz));
-    r.text("room:", taLegendTextLo());
+    tr.textAtts("room:", attsLegendTextLo());
     r.end();
     r.begin(#flow(horz));
     r.begin(#flow(vert));
-    r.text(debug_show st.pos.room, taLegendTextHi());
+    tr.textAtts(debug_show st.pos.room, attsLegendTextHi());
     r.end();
     r.end();
 
     r.begin(#flow(horz));
-    r.text("tile:", taLegendTextLo());
+    tr.textAtts("tile:", attsLegendTextLo());
     r.end();
     r.begin(#flow(horz));
     r.begin(#flow(vert));
-    r.text("(", taLegendTextLo());
+    tr.textAtts("(", attsLegendTextLo());
     r.end();
     r.begin(#flow(vert));
-    r.text(debug_show st.pos.tile.1, taLegendTextHi());
+    tr.textAtts(debug_show st.pos.tile.1, attsLegendTextHi());
     r.end();
     r.begin(#flow(vert));
-    r.text(",", taLegendTextLo());
+    tr.textAtts(",", attsLegendTextLo());
     r.end();
     r.begin(#flow(vert));
-    r.text(debug_show st.pos.tile.0, taLegendTextHi());
+    tr.textAtts(debug_show st.pos.tile.0, attsLegendTextHi());
     r.end();
     r.begin(#flow(vert));
-    r.text(")", taLegendTextLo());
+    tr.textAtts(")", attsLegendTextLo());
     r.end();
     r.end();
 
     r.begin(#flow(vert)); // Keys begin
-    r.text("keys:", taLegendTextLo());
+    tr.textAtts("keys:", attsLegendTextLo());
     r.end();
     r.begin(#flow(horz));
     switch (st.keys) {
-      case null { r.text("none", taLegendTextHi()) };
+      case null { tr.textAtts("none", attsLegendTextHi()) };
       case (?_) {
              List.iter<()>(st.keys,
                func (_:()) {
                  r.begin(#flow(vert));
-                 r.text("ķ", taLegend(#closed((255, 255, 100))));
+                 tr.textAtts("ķ", attsLegendFg(#closed((255, 255, 100))));
                  r.end();
                })
            };
@@ -156,18 +165,18 @@ module {
         r.begin(#flow(horz));
         if (j == st.pos.tile.0
         and i == st.pos.tile.1) {
-          r.text("☺", taPlayer())
+          tr.textAtts("☺", taPlayer())
         } else {
           switch tile {
-          case (#void) { r.text(" ", taVoid()) };
-          case (#start) { r.text("◊", taStart()) };
-          case (#goal) { r.text("⇲", taGoal()) };
-          case (#floor) { r.text(" ", taFloor()) };
-          case (#wall) { r.text("█", taWall()) };
-          case (#lock(_)) { r.text("ļ", taLock()) };
-          case (#key(_)) { r.text("ķ", taKey()) };
-          case (#inward(_)) { r.text("◊", taWall()) };
-          case (#outward(_)) { r.text("⇲", taWall()) };
+          case (#void) { tr.textAtts(" ", taVoid())  };
+          case (#start) { tr.textAtts("◊", taStart()) };
+          case (#goal) { tr.textAtts("⇲", taGoal()) };
+          case (#floor) { tr.textAtts(" ", taFloor()) };
+          case (#wall) { tr.textAtts("█", taWall()) };
+          case (#lock(_)) { tr.textAtts("ļ", taLock()) };
+          case (#key(_)) { tr.textAtts("ķ", taKey()) };
+          case (#inward(_)) { tr.textAtts("◊", taWall()) };
+          case (#outward(_)) { tr.textAtts("⇲", taWall()) };
           };
         };
         r.end();

@@ -16,12 +16,12 @@ actor {
     shift: Bool
   };
 
-  var state = {
+  flexible var state = {
     var x = 0 : Nat;
     var y = 0 : Nat;
   };
 
-  var windowDim : Render.Dim = {
+  flexible var windowDim : Render.Dim = {
     width = 100;
     height = 100;
   };

@@ -19,11 +19,11 @@ actor {
     var count : Nat
   };
 
-  var state : State = {
+  flexible var state : State = {
     var count = 0;
   };
 
-  var windowDim : Render.Dim = {
+  flexible var windowDim : Render.Dim = {
     width = 100;
     height = 100;
   };

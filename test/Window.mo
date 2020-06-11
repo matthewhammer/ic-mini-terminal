@@ -15,7 +15,7 @@ actor {
     shift: Bool
   };
 
-  var windowDim : Render.Dim = {
+  flexible var windowDim : Render.Dim = {
     width = 100;
     height = 100;
   };

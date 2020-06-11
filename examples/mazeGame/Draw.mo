@@ -74,7 +74,7 @@ module {
 
   // --------------------------------------------------------
 
-  public func drawState(st:State) : Render.Elm {
+  public func drawState(st:State, isQueryView:Bool) : Render.Elm {
 
     let r = Render.Render();
     let cr = Render.CharRender(r, Mono5x5.bitmapOfChar,
@@ -89,16 +89,22 @@ module {
     let room_tiles = st.maze.rooms[st.pos.room].tiles;
 
     r.begin(#flow(vert)); // Display begin
-    r.fill(#open((200, 255, 200), 1));
+    r.fill(
+      if isQueryView
+        #open((200, 255, 200), 1)
+      else
+        #open((255, 255, 0), 1)
+    );
 
     // Title line:
+    let queryViewMsg = if isQueryView " (q)" else "";
     if (st.won) {
       r.begin(#flow(horz));
-      tr.textAtts("mazegame: game over, you won!!", taTitleText());
+      tr.textAtts("mazegame: game over, you won!!" # queryViewMsg, taTitleText());
       r.end();
     } else {
       r.begin(#flow(horz));
-      tr.textAtts("mazegame in motoko!", taTitleText());
+      tr.textAtts("mazegame in motoko!" # queryViewMsg, taTitleText());
       r.end();
     };
 

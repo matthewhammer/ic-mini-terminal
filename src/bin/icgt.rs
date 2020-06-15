@@ -435,11 +435,13 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
             ))
         }
         ServerCall::QueryKeyDown(_keys) => {
-            Ok(Some(runtime.block_on(agent.query(
-                &canister_id,
-                &"queryKeyDown",
-                &Blob(arg_bytes),
-            )).unwrap()))
+            runtime.block_on(
+                agent.query(
+                    &canister_id,
+                    &"queryKeyDown",
+                    &Blob(arg_bytes),
+                )
+            )
         },
         ServerCall::UpdateKeyDown(_keys) => {
             runtime.block_on(agent.call_and_wait(
@@ -451,7 +453,7 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
         },
     };
     let elapsed = timestamp.elapsed().unwrap();
-    if let Ok(Some(blob_res)) = blob_res {
+    if let Ok(blob_res) = blob_res {
         info!("server_call: Ok: Response size {:?} bytes; elapsed time {:?}", 
               blob_res.0.len(), elapsed);
         match Decode!(&(*blob_res.0), render::Result) {

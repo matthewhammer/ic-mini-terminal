@@ -49,6 +49,8 @@ pub struct CliOpt {
     command: CliCommand,
 }
 
+pub type PlayerId = candid::Nat;
+
 #[derive(StructOpt, Debug, Clone)]
 enum CliCommand {
     #[structopt(
@@ -62,7 +64,8 @@ enum CliCommand {
     )]
     Connect {
         replica_url: String,
-        canister_id: String
+        canister_id: String,
+        player_id: PlayerId,
     },
 }
 
@@ -72,6 +75,7 @@ pub struct ConnectConfig {
     cli_opt: CliOpt,
     canister_id: String,
     replica_url: String,
+    player_id: PlayerId,
 }
 
 /// Messages that go from this terminal binary to the server cansiter
@@ -405,10 +409,10 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
     let timestamp = std::time::SystemTime::now();
     info!("server_call: {:?}", call);
     let arg_bytes = match call {
-        ServerCall::Tick => { Encode!(&()).unwrap() }
-        ServerCall::WindowSizeChange(window_dim) => { Encode!(window_dim).unwrap() }
-        ServerCall::QueryKeyDown(keys) => { Encode!(keys).unwrap() }
-        ServerCall::UpdateKeyDown(keys) => { Encode!(keys).unwrap() }
+        ServerCall::Tick => { Encode!((&cfg.player_id)).unwrap() }
+        ServerCall::WindowSizeChange(window_dim) => { Encode!(&cfg.player_id, window_dim).unwrap() }
+        ServerCall::QueryKeyDown(keys) => { Encode!(&cfg.player_id, keys).unwrap() }
+        ServerCall::UpdateKeyDown(keys) => { Encode!(&cfg.player_id, keys).unwrap() }
     };
     info!("server_call: Encoded argument via Candid; Arg size {:?} bytes", arg_bytes.len());
     info!("server_call: Awaiting response from server...");
@@ -491,11 +495,12 @@ fn main() {
             CliOpt::clap().gen_completions_to("icgt", s, &mut io::stdout());
             info!("done")
         },
-        CliCommand::Connect { canister_id, replica_url } => {
+        CliCommand::Connect { canister_id, replica_url, player_id } => {
             let cfg = ConnectConfig{
                 canister_id,
                 replica_url,
                 cli_opt,
+                player_id,
             };
             info!("Connecting to IC canister: {:?}", cfg);
             do_event_loop(&cfg).unwrap()

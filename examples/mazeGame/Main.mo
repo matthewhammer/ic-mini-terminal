@@ -15,21 +15,24 @@ actor {
 
   flexible var gameState = State.initState();
 
-  public func windowSizeChange(dim:Render.Dim) : async Types.ResOut {
+  public func windowSizeChange(playerId:Nat, dim:Render.Dim) : async Types.ResOut {
     Debug.print "windowSizeChange";
+    Debug.print (" - playerId " # debug_show playerId);
     Debug.print (debug_show dim);
     windowDim := dim;
     redrawScreen(gameState, false, #ok)
   };
 
-  public func updateKeyDown(keys:[Types.KeyInfo]) : async Types.ResOut {
+  public func updateKeyDown(playerId:Nat, keys:[Types.KeyInfo]) : async Types.ResOut {
     Debug.print "updateKeyDown";
+    Debug.print (" - playerId " # debug_show playerId);
     State.keyDownSeq(gameState, keys);
     redrawScreen(gameState, false, #ok)
   };
 
-  public query func queryKeyDown(keys:[Types.KeyInfo]) : async Types.ResOut {
+  public query func queryKeyDown(playerId:Nat, keys:[Types.KeyInfo]) : async Types.ResOut {
     Debug.print "queryKeyDown";
+    Debug.print (" - playerId " # debug_show playerId);
     let temp = State.clone(gameState);
     State.keyDownSeq(temp, keys);
     redrawScreen(temp, true, #ok)

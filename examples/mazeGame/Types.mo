@@ -18,11 +18,14 @@ public type Tile = {
   #goal;
   #floor;
   #wall;
-  #lock;
-  #key;
+  #lock : KeyUser;
+  #key : KeyUser;
   #inward;
   #outward : Pos;
 };
+
+/// KeyUser: `null` means "all players", and `?n` means "only player n"
+public type KeyUser = ?PlayerId;
 
 public type Room = {
   width : Nat;
@@ -42,11 +45,18 @@ public type Maze = {
 
 public type Dir2D = {#up; #down; #left; #right};
 
+public type PlayerId = Nat;
+
+// player state (for players 1 and 2)
+public type PlayerState = {
+  var keys: List.List<KeyUser>;
+  var pos: Pos;
+};
+
 // full game state:
 public type State = {
-  var keys: List.List<()>;
+  var player: [PlayerState];
   var maze: Maze;
-  var pos: Pos;
   var won: Bool;
 };
 

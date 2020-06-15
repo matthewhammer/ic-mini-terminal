@@ -74,7 +74,8 @@ module {
 
   // --------------------------------------------------------
 
-  public func drawState(st:State, isQueryView:Bool) : Render.Elm {
+  public func drawState(st:State, playerId:Nat, isQueryView:Bool) : Render.Elm {
+    assert(playerId >= 1);
 
     let r = Render.Render();
     let cr = Render.CharRender(r, Mono5x5.bitmapOfChar,
@@ -86,8 +87,9 @@ module {
                         });
     let tr = Render.TextRender(cr);
 
-    let room_tiles = st.maze.rooms[st.pos.room].tiles;
-
+    let pst = st.player[playerId - 1];
+    let room_tiles = st.maze.rooms[pst.pos.room].tiles;
+    
     r.begin(#flow(vert)); // Display begin
     r.fill(
       if isQueryView
@@ -118,7 +120,7 @@ module {
     r.end();
     r.begin(#flow(horz));
     r.begin(#flow(vert));
-    tr.textAtts(debug_show st.pos.room, attsLegendTextHi());
+    tr.textAtts(debug_show pst.pos.room, attsLegendTextHi());
     r.end();
     r.end();
 
@@ -130,13 +132,13 @@ module {
     tr.textAtts("(", attsLegendTextLo());
     r.end();
     r.begin(#flow(vert));
-    tr.textAtts(debug_show st.pos.tile.1, attsLegendTextHi());
+    tr.textAtts(debug_show pst.pos.tile.1, attsLegendTextHi());
     r.end();
     r.begin(#flow(vert));
     tr.textAtts(",", attsLegendTextLo());
     r.end();
     r.begin(#flow(vert));
-    tr.textAtts(debug_show st.pos.tile.0, attsLegendTextHi());
+    tr.textAtts(debug_show pst.pos.tile.0, attsLegendTextHi());
     r.end();
     r.begin(#flow(vert));
     tr.textAtts(")", attsLegendTextLo());
@@ -147,11 +149,11 @@ module {
     tr.textAtts("keys:", attsLegendTextLo());
     r.end();
     r.begin(#flow(horz));
-    switch (st.keys) {
+    switch (pst.keys) {
       case null { tr.textAtts("none", attsLegendTextHi()) };
       case (?_) {
-             List.iter<()>(st.keys,
-               func (_:()) {
+             List.iter<()>(pst.keys,
+               func (_:?Nat) {
                  r.begin(#flow(vert));
                  tr.textAtts("ķ", attsLegendFg(#closed((255, 255, 100))));
                  r.end();
@@ -169,8 +171,8 @@ module {
       r.begin(#flow(horz));
       for (tile in row.vals()) {
         r.begin(#flow(horz));
-        if (j == st.pos.tile.0
-        and i == st.pos.tile.1) {
+        if (j == pst.pos.tile.0
+        and i == pst.pos.tile.1) {
           tr.textAtts("☺", taPlayer())
         } else {
           switch tile {

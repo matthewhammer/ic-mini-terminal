@@ -65,7 +65,7 @@ enum CliCommand {
     Connect {
         replica_url: String,
         canister_id: String,
-        player_id: PlayerId,
+        player_id: Option<PlayerId>,
     },
 }
 
@@ -500,7 +500,7 @@ fn main() {
                 canister_id,
                 replica_url,
                 cli_opt,
-                player_id,
+                player_id: player_id.unwrap_or(Nat::from(0)),
             };
             info!("Connecting to IC canister: {:?}", cfg);
             do_event_loop(&cfg).unwrap()

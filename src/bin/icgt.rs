@@ -1,36 +1,19 @@
-//extern crate hashcons;
-extern crate sdl2;
-extern crate serde;
-extern crate tokio;
-extern crate icgt;
-extern crate delay;
-extern crate ic_agent;
-extern crate num_traits;
-
-#[macro_use]
-extern crate candid;
-
-// Logging:
-#[macro_use]
-extern crate log;
-extern crate env_logger;
-
 // CLI: Representation and processing:
-extern crate clap;
 use clap::Shell;
 
 extern crate structopt;
 use structopt::StructOpt;
 
+use candid::{Decode, Encode, Nat};
 use delay::Delay;
+use ic_agent::{Agent, AgentConfig, Blob, CanisterId};
+use log::*;
+use num_traits::cast::ToPrimitive;
 use sdl2::event::Event as SysEvent; // not to be confused with our own definition
 use sdl2::event::WindowEvent;
 use sdl2::keyboard::Keycode;
 use std::io;
 use std::time::Duration;
-use ic_agent::{Agent, AgentConfig, Blob, CanisterId};
-use candid::Nat;
-use num_traits::cast::ToPrimitive;
 
 /// Internet Computer Game Terminal (icgt)
 #[derive(StructOpt, Debug, Clone)]
@@ -103,7 +86,10 @@ fn init_log(level_filter: log::LevelFilter) {
         .init();
 }
 
-use icgt::types::{event, render::{self, Fill, Elm}};
+use icgt::types::{
+    event,
+    render::{self, Elm, Fill},
+};
 use sdl2::render::{Canvas, RenderTarget};
 
 const RETRY_PAUSE: Duration = Duration::from_millis(100);
@@ -116,11 +102,11 @@ pub fn agent(url: &str) -> Result<Agent, ic_agent::AgentError> {
     })
 }
 
-fn nat_ceil(n:&Nat) -> u32 {
+fn nat_ceil(n: &Nat) -> u32 {
     n.0.to_u32().unwrap()
 }
 
-fn byte_ceil(n:&Nat) -> u8 {
+fn byte_ceil(n: &Nat) -> u8 {
     match n.0.to_u8() {
         Some(byte) => byte,
         None => 255,
@@ -129,7 +115,7 @@ fn byte_ceil(n:&Nat) -> u8 {
 
 fn translate_color(c: &render::Color) -> sdl2::pixels::Color {
     match c {
-        (r, g, b) => sdl2::pixels::Color::RGB(byte_ceil(r), byte_ceil(g), byte_ceil(b))
+        (r, g, b) => sdl2::pixels::Color::RGB(byte_ceil(r), byte_ceil(g), byte_ceil(b)),
     }
 }
 
@@ -137,10 +123,10 @@ fn translate_rect(pos: &render::Pos, r: &render::Rect) -> sdl2::rect::Rect {
     // todo -- clip the size of the rect dimension by the bound param
     trace!("translate_rect {:?} {:?}", pos, r);
     sdl2::rect::Rect::new(
-        nat_ceil(& Nat(&pos.x.0 + &r.pos.x.0)) as i32,
-        nat_ceil(& Nat(&pos.y.0 + &r.pos.y.0)) as i32,
-        nat_ceil(& r.dim.width),
-        nat_ceil(& r.dim.height),
+        nat_ceil(&Nat(&pos.x.0 + &r.pos.x.0)) as i32,
+        nat_ceil(&Nat(&pos.y.0 + &r.pos.y.0)) as i32,
+        nat_ceil(&r.dim.width),
+        nat_ceil(&r.dim.height),
     )
 }
 
@@ -183,7 +169,12 @@ pub fn draw_rect_elms<T: RenderTarget>(
     draw_rect::<T>(
         canvas,
         &pos,
-        &render::Rect::new(nat_zero(), nat_zero(), dim.width.clone(), dim.height.clone()),
+        &render::Rect::new(
+            nat_zero(),
+            nat_zero(),
+            dim.width.clone(),
+            dim.height.clone(),
+        ),
         fill,
     );
     for elm in elms.iter() {
@@ -250,7 +241,7 @@ fn translate_system_event(event: SysEvent) -> Option<event::Event> {
                 Keycode::LShift => "LShift".to_string(),
                 keycode => {
                     info!("Unrecognized key code, ignoring event: {:?}", keycode);
-                    return None
+                    return None;
                 }
             };
             let event = event::Event::KeyDown(event::KeyEventInfo {
@@ -259,8 +250,8 @@ fn translate_system_event(event: SysEvent) -> Option<event::Event> {
                 alt: false,
                 ctrl: false,
                 meta: false,
-                shift: keymod.contains(sdl2::keyboard::Mod::LSHIFTMOD) ||
-                    keymod.contains(sdl2::keyboard::Mod::RSHIFTMOD),
+                shift: keymod.contains(sdl2::keyboard::Mod::LSHIFTMOD)
+                    || keymod.contains(sdl2::keyboard::Mod::RSHIFTMOD),
             });
             Some(event)
         }
@@ -271,27 +262,28 @@ fn translate_system_event(event: SysEvent) -> Option<event::Event> {
 pub fn redraw<T: RenderTarget>(
     canvas: &mut Canvas<T>,
     dim: &render::Dim,
-    rr:&render::Result,
+    rr: &render::Result,
 ) -> Result<(), String> {
-    let pos = render::Pos { x: nat_zero(), y: nat_zero() };
+    let pos = render::Pos {
+        x: nat_zero(),
+        y: nat_zero(),
+    };
     let fill = render::Fill::Closed((nat_zero(), nat_zero(), nat_zero()));
     match rr {
         render::Result::Ok(render::Out::Draw(elm)) => {
             draw_rect_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
-        },
+        }
         render::Result::Ok(render::Out::Redraw(elms)) => {
             if elms.len() == 1 && elms[0].0 == "screen" {
                 draw_rect_elms(canvas, &pos, dim, &fill, &vec![elms[0].1.clone()])?;
             } else {
                 warn!("unrecognized redraw elements {:?}", elms);
             }
-        },
+        }
         render::Result::Err(render::Out::Draw(elm)) => {
             draw_rect_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
-        },
-        _ => {
-            unimplemented!()
         }
+        _ => unimplemented!(),
     };
     canvas.present();
     Ok(())
@@ -308,9 +300,11 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
     let window = video_subsystem
-        .window("ic-game-terminal",
-                nat_ceil(&window_dim.width),
-                nat_ceil(&window_dim.height))
+        .window(
+            "ic-game-terminal",
+            nat_ceil(&window_dim.width),
+            nat_ceil(&window_dim.height),
+        )
         .position_centered()
         .resizable()
         //.input_grabbed()
@@ -355,48 +349,44 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
                 window_dim = new_dim;
                 redraw(&mut canvas, &window_dim, &rr)?;
                 continue 'running;
-            },
+            }
             event::Event::Quit => {
                 debug!("Quit");
-                return Ok(())
-            },
-            event::Event::KeyUp(ref ke_info) => {
-                debug!("KeyUp {:?}", ke_info.key)
-            },
+                return Ok(());
+            }
+            event::Event::KeyUp(ref ke_info) => debug!("KeyUp {:?}", ke_info.key),
             event::Event::KeyDown(ref ke_info) => {
                 debug!("KeyDown {:?}", ke_info.key);
                 if ke_info.key == "LShift" || ke_info.key == "RShift" {
                     debug!("ignoring bare shift {:?}", ke_info.key);
-                    continue 'running
+                    continue 'running;
                 };
-                let rr: render::Result =
-                    if ke_info.shift {
-                        do_update = false;
+                let rr: render::Result = if ke_info.shift {
+                    do_update = false;
+                    key_infos.push(ke_info.clone());
+                    server_call(cfg, &ServerCall::QueryKeyDown(key_infos.clone()))?
+                } else {
+                    if do_update == false {
+                        do_update = true;
                         key_infos.push(ke_info.clone());
-                        server_call(cfg, &ServerCall::QueryKeyDown(key_infos.clone()))?
+                        let rr = server_call(cfg, &ServerCall::UpdateKeyDown(key_infos.clone()))?;
+                        key_infos = vec![];
+                        rr
                     } else {
-                        if do_update == false {
-                            do_update = true;
-                            key_infos.push(ke_info.clone());
-                            let rr = server_call(cfg, &ServerCall::UpdateKeyDown(key_infos.clone()))?;
-                            key_infos = vec![];
-                            rr
-                        } else {
-                            server_call(cfg, &ServerCall::UpdateKeyDown(vec![ke_info.clone()]))?
-                        }
-                    };
+                        server_call(cfg, &ServerCall::UpdateKeyDown(vec![ke_info.clone()]))?
+                    }
+                };
                 redraw(&mut canvas, &window_dim, &rr)?;
-            },
+            }
         };
     }
 }
 
-pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Result, String> {
+pub fn server_call(cfg: &ConnectConfig, call: &ServerCall) -> Result<render::Result, String> {
     use tokio::runtime::Runtime;
     debug!(
         "server_call: to canister_id {:?} at replica_url {:?}",
-        cfg.canister_id,
-        cfg.replica_url
+        cfg.canister_id, cfg.replica_url
     );
     let mut runtime = Runtime::new().expect("Unable to create a runtime");
     let delay = Delay::builder()
@@ -404,58 +394,48 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
         .timeout(REQUEST_TIMEOUT)
         .build();
     let agent = agent(&cfg.replica_url).unwrap();
-    let canister_id =
-        CanisterId::from_text(cfg.canister_id.clone()).unwrap();
+    let canister_id = CanisterId::from_text(cfg.canister_id.clone()).unwrap();
     let timestamp = std::time::SystemTime::now();
     info!("server_call: {:?}", call);
     let arg_bytes = match call {
-        ServerCall::Tick => { Encode!((&cfg.player_id)).unwrap() }
-        ServerCall::WindowSizeChange(window_dim) => { Encode!(&cfg.player_id, window_dim).unwrap() }
-        ServerCall::QueryKeyDown(keys) => { Encode!(&cfg.player_id, keys).unwrap() }
-        ServerCall::UpdateKeyDown(keys) => { Encode!(&cfg.player_id, keys).unwrap() }
+        ServerCall::Tick => Encode!((&cfg.player_id)).unwrap(),
+        ServerCall::WindowSizeChange(window_dim) => Encode!(&cfg.player_id, window_dim).unwrap(),
+        ServerCall::QueryKeyDown(keys) => Encode!(&cfg.player_id, keys).unwrap(),
+        ServerCall::UpdateKeyDown(keys) => Encode!(&cfg.player_id, keys).unwrap(),
     };
-    info!("server_call: Encoded argument via Candid; Arg size {:?} bytes", arg_bytes.len());
+    info!(
+        "server_call: Encoded argument via Candid; Arg size {:?} bytes",
+        arg_bytes.len()
+    );
     info!("server_call: Awaiting response from server...");
     // do an update or query call, based on the ServerCall case:
     let blob_res = match call {
         ServerCall::Tick => {
-            runtime.block_on(agent.call_and_wait(
-                &canister_id,
-                &"tick",
-                &Blob(arg_bytes),
-                delay,
-            ))
-        },
-        ServerCall::WindowSizeChange(_window_dim) => {
-            runtime.block_on(agent.call_and_wait(
-                &canister_id,
-                &"windowSizeChange",
-                &Blob(arg_bytes),
-                delay,
-            ))
+            runtime.block_on(agent.call_and_wait(&canister_id, &"tick", &Blob(arg_bytes), delay))
         }
+        ServerCall::WindowSizeChange(_window_dim) => runtime.block_on(agent.call_and_wait(
+            &canister_id,
+            &"windowSizeChange",
+            &Blob(arg_bytes),
+            delay,
+        )),
         ServerCall::QueryKeyDown(_keys) => {
-            runtime.block_on(
-                agent.query(
-                    &canister_id,
-                    &"queryKeyDown",
-                    &Blob(arg_bytes),
-                )
-            )
-        },
-        ServerCall::UpdateKeyDown(_keys) => {
-            runtime.block_on(agent.call_and_wait(
-                &canister_id,
-                &"updateKeyDown",
-                &Blob(arg_bytes),
-                delay,
-            ))
-        },
+            runtime.block_on(agent.query(&canister_id, &"queryKeyDown", &Blob(arg_bytes)))
+        }
+        ServerCall::UpdateKeyDown(_keys) => runtime.block_on(agent.call_and_wait(
+            &canister_id,
+            &"updateKeyDown",
+            &Blob(arg_bytes),
+            delay,
+        )),
     };
     let elapsed = timestamp.elapsed().unwrap();
     if let Ok(blob_res) = blob_res {
-        info!("server_call: Ok: Response size {:?} bytes; elapsed time {:?}", 
-              blob_res.0.len(), elapsed);
+        info!(
+            "server_call: Ok: Response size {:?} bytes; elapsed time {:?}",
+            blob_res.0.len(),
+            elapsed
+        );
         match Decode!(&(*blob_res.0), render::Result) {
             Ok(res) => {
                 if true {
@@ -464,13 +444,14 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
                         res_log.truncate(1000);
                         res_log.push_str("...(truncated)");
                     }
-                    info!("server_call: Successful decoding of graphics output: {:?}", res_log);
+                    info!(
+                        "server_call: Successful decoding of graphics output: {:?}",
+                        res_log
+                    );
                 }
                 Ok(res)
-            },
-            Err(candid_err) => {
-                Err(format!("Candid decoding error: {:?}", candid_err))
             }
+            Err(candid_err) => Err(format!("Candid decoding error: {:?}", candid_err)),
         }
     } else {
         let res = format!("{:?}", blob_res);
@@ -496,9 +477,13 @@ fn main() {
             // see also: https://clap.rs/effortless-auto-completion/
             CliOpt::clap().gen_completions_to("icgt", s, &mut io::stdout());
             info!("done")
-        },
-        CliCommand::Connect { canister_id, replica_url, player_id } => {
-            let cfg = ConnectConfig{
+        }
+        CliCommand::Connect {
+            canister_id,
+            replica_url,
+            player_id,
+        } => {
+            let cfg = ConnectConfig {
                 canister_id,
                 replica_url,
                 cli_opt,

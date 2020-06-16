@@ -89,7 +89,7 @@ module {
 
     let pst = st.player[playerId - 1];
     let room_tiles = st.maze.rooms[pst.pos.room].tiles;
-    
+
     r.begin(#flow(vert)); // Display begin
     r.fill(
       if isQueryView
@@ -152,7 +152,7 @@ module {
     switch (pst.keys) {
       case null { tr.textAtts("none", attsLegendTextHi()) };
       case (?_) {
-             List.iter<Types.KeyUser>(pst.keys,
+             List.apply<Types.KeyUser>(pst.keys,
                func (x:Types.KeyUser) {
                  r.begin(#flow(vert));
                  tr.textAtts("ķ", attsLegendFg(#closed((255, 255, 100))));

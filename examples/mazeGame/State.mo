@@ -23,7 +23,7 @@ module {
     {
       var maze = st.maze ;
       var won = st.won ;
-      var player = Array.map(clonePlayer, st.player);
+      var player = Array.transform(st.player, clonePlayer);
     }
   };
 
@@ -59,7 +59,7 @@ module {
 
   public func setTile(st:State, pos:Pos, newTile:Tile) : ?Tile {
     let room = st.maze.rooms[pos.room];
-    // address y pos (row), then x pos (column): 
+    // address y pos (row), then x pos (column):
     if (pos.tile.1 < room.height and pos.tile.0 < room.width) {
       let oldTile = room.tiles[pos.tile.1][pos.tile.0];
       room.tiles[pos.tile.1][pos.tile.0] := newTile;
@@ -233,7 +233,7 @@ module {
       [ var w, f, k, w,  k, k, f, w,  k, k, f, w ],
       [ var x, w, w, w,  w, w, w, x,  w, w, w, x ],
     ];
-    
+
     let maze_ : Types.Maze = {
       start = startPos;
       rooms = [
@@ -253,7 +253,7 @@ module {
           tiles=room2Tiles;
         }
       ]
-    }; 
+    };
     // to do -- this let binding should be permitted in the record below
     let noKeys : List.List<?Nat> = null;
     {

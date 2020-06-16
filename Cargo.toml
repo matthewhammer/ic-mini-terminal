@@ -6,7 +6,11 @@ edition = "2018"
 
 
 [dependencies]
+actix = "0.10.0-alpha.3"
+futures-util = "0.3.5"
+tokio = "0.2.21"
 clap = "2.33"
+crossbeam = "0.7.3"
 structopt = "0.2"
 log = "0.4"
 env_logger = "0.6"
@@ -15,14 +19,14 @@ serde_bytes = "0.11"
 serde_cbor = "0.9"
 serde_json = "1.0"
 sdl2 = "0.32"
-tokio = "0.2.10"
 delay = "0.1.0"
 candid = { git = "https://github.com/dfinity/candid" }
 num-bigint = "0.2.6"
 num-traits = "0.2.6"
 
+
 ## DFINITY Engineers: Update this line for your checkout of the SDK repo:
-ic-agent = { path = "/Users/matthew/dfn/sdk/src/agent/rust" }
+ic-agent = { path = "/Users/eftychis/Code/dfinity/sdk/src/agent/rust" }
 
 [lib]
 name = "icgt"

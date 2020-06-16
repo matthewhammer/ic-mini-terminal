@@ -82,12 +82,17 @@ module {
                         {
                           zoom = 3;
                           fgFill = #closed((255, 255, 255));
-                          bgFill = #closed((0, 0, 0));
+                          bgFill = #closed((100, 0, 0));
                           flow = horz
                         });
     let tr = Render.TextRender(cr);
 
     let pst = st.player[playerId - 1];
+    // We are assuming 2 players here -- for expediences sake. We take
+    // the complement player.
+
+    // TODO(eftychis): Later just draw the whole array of players.
+    let pstOther = st.player[playerId %2];
     let room_tiles = st.maze.rooms[pst.pos.room].tiles;
 
     r.begin(#flow(vert)); // Display begin
@@ -102,11 +107,11 @@ module {
     let queryViewMsg = if isQueryView " (q)" else "";
     if (st.won) {
       r.begin(#flow(horz));
-      tr.textAtts("mazegame: game over, you won!!" # queryViewMsg, taTitleText());
+      tr.textAtts("VICTORY!! \n Ranking: IcyMAZER." # queryViewMsg, taTitleText());
       r.end();
     } else {
       r.begin(#flow(horz));
-      tr.textAtts("mazegame in motoko!" # queryViewMsg, taTitleText());
+      tr.textAtts("IcyMAZERS: brought to you by motoko!" # queryViewMsg, taTitleText());
       r.end();
     };
 

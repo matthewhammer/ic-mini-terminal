@@ -254,7 +254,6 @@ module {
         }
       ]
     };
-    // to do -- this let binding should be permitted in the record below
     let noKeys : List.List<?Nat> = null;
     {
       var player = [

@@ -26,7 +26,7 @@ num-traits = "0.2.6"
 
 
 ## DFINITY Engineers: Update this line for your checkout of the SDK repo:
-ic-agent = { path = "/Users/eftychis/Code/dfinity/sdk/src/agent/rust" }
+ic-agent = { path = "/Users/matthew/dfn/sdk/src/agent/rust" }
 
 [lib]
 name = "icgt"

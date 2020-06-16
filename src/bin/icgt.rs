@@ -1,13 +1,16 @@
+#![allow(unused_imports)]
+
 // CLI: Representation and processing:
 use clap::Shell;
 
 use structopt::StructOpt;
 
+use std::sync::{Arc, RwLock};
+
 use actix::prelude::*;
 use candid::{Decode, Encode, Nat};
 use delay::Delay;
-use ic_agent::{Agent, AgentConfig, Blob, CanisterId};
-use icgt::updater::Trigger;
+use icgt::{types::*, updater::*};
 use log::*;
 use num_traits::cast::ToPrimitive;
 use sdl2::event::Event as SysEvent; // not to be confused with our own definition
@@ -15,68 +18,6 @@ use sdl2::event::WindowEvent;
 use sdl2::keyboard::Keycode;
 use std::io;
 use std::time::Duration;
-
-/// Internet Computer Game Terminal (icgt)
-#[derive(StructOpt, Debug, Clone)]
-#[structopt(name = "icgt", raw(setting = "clap::AppSettings::DeriveDisplayOrder"))]
-pub struct CliOpt {
-    /// Enable tracing -- the most verbose log.
-    #[structopt(short = "t", long = "trace-log")]
-    log_trace: bool,
-    /// Enable logging for debugging.
-    #[structopt(short = "d", long = "debug-log")]
-    log_debug: bool,
-    /// Disable most logging, if not explicitly enabled.
-    #[structopt(short = "q", long = "quiet-log")]
-    log_quiet: bool,
-    #[structopt(subcommand)]
-    command: CliCommand,
-}
-
-pub type PlayerId = candid::Nat;
-
-#[derive(StructOpt, Debug, Clone)]
-enum CliCommand {
-    #[structopt(
-        name = "completions",
-        about = "Generate shell scripts for auto-completions."
-    )]
-    Completions { shell: Shell },
-    #[structopt(
-        name = "connect",
-        about = "Connect to a canister as an IC game server."
-    )]
-    Connect {
-        replica_url: String,
-        canister_id: String,
-        player_id: Option<PlayerId>,
-    },
-}
-
-/// Connection configuration
-#[derive(Debug, Clone)]
-pub struct ConnectConfig {
-    cli_opt: CliOpt,
-    canister_id: String,
-    replica_url: String,
-    player_id: PlayerId,
-}
-
-/// Messages that go from this terminal binary to the server cansiter
-#[derive(Debug, Clone)]
-pub enum ServerCall {
-    // to do -- include the local clock, or a duration since last tick;
-    // we don't have time in the server
-    Tick,
-
-    WindowSizeChange(render::Dim),
-
-    // to do -- more generally, query msg that projects events' outcome
-    QueryKeyDown(Vec<event::KeyEventInfo>),
-
-    // to do -- more generally, update msg that pushes events
-    UpdateKeyDown(Vec<event::KeyEventInfo>),
-}
 
 fn init_log(level_filter: log::LevelFilter) {
     use env_logger::{Builder, WriteStyle};
@@ -92,16 +33,6 @@ use icgt::types::{
     render::{self, Elm, Fill},
 };
 use sdl2::render::{Canvas, RenderTarget};
-
-const RETRY_PAUSE: Duration = Duration::from_millis(100);
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
-
-pub fn agent(url: &str) -> Result<Agent, ic_agent::AgentError> {
-    Agent::new(AgentConfig {
-        url: format!("http://{}", url).as_str(),
-        ..AgentConfig::default()
-    })
-}
 
 fn nat_ceil(n: &Nat) -> u32 {
     n.0.to_u32().unwrap()
@@ -290,11 +221,15 @@ pub fn redraw<T: RenderTarget>(
     Ok(())
 }
 
-pub fn do_event_loop(cfg: &ConnectConfig, tick_ev: crossbeam::Receiver<()>) -> Result<(), String> {
+pub fn do_event_loop(
+    cfg: &ConnectConfig,
+    tick_ev: crossbeam::Receiver<render::Result>,
+    key_infos: Arc<RwLock<Vec<event::KeyEventInfo>>>,
+) -> Result<(), String> {
     use sdl2::event::EventType;
 
     let mut do_update = true;
-    let mut key_infos = vec![];
+    // let mut key_infos = vec![];
     let mut window_dim = render::Dim {
         width: Nat::from(1000),
         height: Nat::from(666),
@@ -341,13 +276,11 @@ pub fn do_event_loop(cfg: &ConnectConfig, tick_ev: crossbeam::Receiver<()>) -> R
         let update_event = tick_ev.try_recv();
 
         match update_event {
-            Ok(()) => {
+            Ok(rr) => {
                 // let's query state now and redraw!
-                // TODO(eftychis): Rethink this!
-                do_update = true;
-                // key_infos.push(ke_info.clone());
-                let rr = server_call(cfg, &ServerCall::UpdateKeyDown(key_infos.clone()))?;
-                key_infos = vec![];
+
+                // let rr = server_call(cfg, &ServerCall::UpdateKeyDown(key_infos.clone()))?;
+                *key_infos.write().unwrap() = vec![];
 
                 redraw(&mut canvas, &window_dim, &rr)?;
             }
@@ -356,140 +289,66 @@ pub fn do_event_loop(cfg: &ConnectConfig, tick_ev: crossbeam::Receiver<()>) -> R
             }
         };
         // TODO(): Here we are waiting for events!!! We need to time out perhaps?
-        let event = translate_system_event(event_pump.wait_event());
-        let event = match event {
-            None => continue 'running,
-            Some(event) => event,
-        };
-        // catch window resize event: redraw and loop:
-        match event {
-            event::Event::WindowSizeChange(new_dim) => {
-                debug!("WindowSizeChange {:?}", new_dim);
-                let rr: render::Result =
-                    server_call(cfg, &ServerCall::WindowSizeChange(new_dim.clone()))?;
-                window_dim = new_dim;
-                redraw(&mut canvas, &window_dim, &rr)?;
-                continue 'running;
-            }
-            event::Event::Quit => {
-                debug!("Quit");
-                return Ok(());
-            }
-            event::Event::KeyUp(ref ke_info) => debug!("KeyUp {:?}", ke_info.key),
-            event::Event::KeyDown(ref ke_info) => {
-                debug!("KeyDown {:?}", ke_info.key);
-                if ke_info.key == "LShift" || ke_info.key == "RShift" {
-                    debug!("ignoring bare shift {:?}", ke_info.key);
+        // event_pump.poll_event()
+
+        for event in event_pump.wait_event_timeout(100) {
+            let event = translate_system_event(event);
+            let event = match event {
+                None => continue 'running,
+                Some(event) => event,
+            };
+            // catch window resize event: redraw and loop:
+
+            match event {
+                event::Event::WindowSizeChange(new_dim) => {
+                    debug!("WindowSizeChange {:?}", new_dim);
+                    let rr: render::Result =
+                        server_call(cfg, &ServerCall::WindowSizeChange(new_dim.clone()))?;
+                    window_dim = new_dim;
+                    redraw(&mut canvas, &window_dim, &rr)?;
                     continue 'running;
-                };
-                let rr: render::Result = if ke_info.shift {
-                    do_update = false;
-                    key_infos.push(ke_info.clone());
-                    server_call(cfg, &ServerCall::QueryKeyDown(key_infos.clone()))?
-                } else if !do_update {
-                    do_update = true;
-                    key_infos.push(ke_info.clone());
-                    let rr = server_call(cfg, &ServerCall::UpdateKeyDown(key_infos.clone()))?;
-                    key_infos = vec![];
-                    rr
-                } else {
-                    server_call(cfg, &ServerCall::UpdateKeyDown(vec![ke_info.clone()]))?
-                };
-
-                redraw(&mut canvas, &window_dim, &rr)?;
-            }
-        };
-    }
-}
-
-pub fn server_call(cfg: &ConnectConfig, call: &ServerCall) -> Result<render::Result, String> {
-    use tokio::runtime::Runtime;
-    debug!(
-        "server_call: to canister_id {:?} at replica_url {:?}",
-        cfg.canister_id, cfg.replica_url
-    );
-    let mut runtime = Runtime::new().expect("Unable to create a runtime");
-    let delay = Delay::builder()
-        .throttle(RETRY_PAUSE)
-        .timeout(REQUEST_TIMEOUT)
-        .build();
-    let agent = agent(&cfg.replica_url).unwrap();
-    let canister_id = CanisterId::from_text(cfg.canister_id.clone()).unwrap();
-    let timestamp = std::time::SystemTime::now();
-    info!("server_call: {:?}", call);
-    let arg_bytes = match call {
-        ServerCall::Tick => Encode!((&cfg.player_id)).unwrap(),
-        ServerCall::WindowSizeChange(window_dim) => Encode!(&cfg.player_id, window_dim).unwrap(),
-        ServerCall::QueryKeyDown(keys) => Encode!(&cfg.player_id, keys).unwrap(),
-        ServerCall::UpdateKeyDown(keys) => Encode!(&cfg.player_id, keys).unwrap(),
-    };
-    info!(
-        "server_call: Encoded argument via Candid; Arg size {:?} bytes",
-        arg_bytes.len()
-    );
-    info!("server_call: Awaiting response from server...");
-    // do an update or query call, based on the ServerCall case:
-    let blob_res = match call {
-        ServerCall::Tick => {
-            runtime.block_on(agent.call_and_wait(&canister_id, &"tick", &Blob(arg_bytes), delay))
-        }
-        ServerCall::WindowSizeChange(_window_dim) => runtime.block_on(agent.call_and_wait(
-            &canister_id,
-            &"windowSizeChange",
-            &Blob(arg_bytes),
-            delay,
-        )),
-        ServerCall::QueryKeyDown(_keys) => {
-            runtime.block_on(agent.query(&canister_id, &"queryKeyDown", &Blob(arg_bytes)))
-        }
-        ServerCall::UpdateKeyDown(_keys) => runtime.block_on(agent.call_and_wait(
-            &canister_id,
-            &"updateKeyDown",
-            &Blob(arg_bytes),
-            delay,
-        )),
-    };
-    let elapsed = timestamp.elapsed().unwrap();
-    if let Ok(blob_res) = blob_res {
-        info!(
-            "server_call: Ok: Response size {:?} bytes; elapsed time {:?}",
-            blob_res.0.len(),
-            elapsed
-        );
-        match Decode!(&(*blob_res.0), render::Result) {
-            Ok(res) => {
-                if true {
-                    let mut res_log = format!("{:?}", &res);
-                    if res_log.len() > 1000 {
-                        res_log.truncate(1000);
-                        res_log.push_str("...(truncated)");
-                    }
-                    info!(
-                        "server_call: Successful decoding of graphics output: {:?}",
-                        res_log
-                    );
                 }
-                Ok(res)
-            }
-            Err(candid_err) => Err(format!("Candid decoding error: {:?}", candid_err)),
+                event::Event::Quit => {
+                    debug!("Quit");
+                    return Ok(());
+                }
+                event::Event::KeyUp(ref ke_info) => debug!("KeyUp {:?}", ke_info.key),
+                event::Event::KeyDown(ref ke_info) => {
+                    debug!("KeyDown {:?}", ke_info.key);
+                    if ke_info.key == "LShift" || ke_info.key == "RShift" {
+                        debug!("ignoring bare shift {:?}", ke_info.key);
+                        continue 'running;
+                    };
+                    let rr: render::Result = if ke_info.shift {
+                        do_update = false;
+
+                        key_infos.write().unwrap().push(ke_info.clone());
+
+                        server_call(
+                            cfg,
+                            &ServerCall::QueryKeyDown(key_infos.read().unwrap().clone()),
+                        )?
+                    } else if !do_update {
+                        do_update = true;
+                        key_infos.write().unwrap().push(ke_info.clone());
+                        let rr = server_call(
+                            cfg,
+                            &ServerCall::UpdateKeyDown(key_infos.read().unwrap().clone()),
+                        )?;
+                        *key_infos.write().unwrap() = vec![];
+                        rr
+                    } else {
+                        server_call(cfg, &ServerCall::UpdateKeyDown(vec![ke_info.clone()]))?
+                    };
+
+                    redraw(&mut canvas, &window_dim, &rr)?;
+                }
+            };
         }
-    } else {
-        let res = format!("{:?}", blob_res);
-        info!("..error result {:?}", res);
-        Err(format!("do_canister_tick() failed: {:?}", res))
     }
 }
 
 fn main() {
-    let (send_ev, recv_ev) = crossbeam::channel::unbounded();
-    // Start a timer and query state.
-    std::thread::spawn(move || {
-        let sys = System::new("updater");
-        let _trigger = Trigger::create(|_context| Trigger::new(Box::new(|_| ()), send_ev));
-
-        sys.run().unwrap();
-    });
-
     let cli_opt = CliOpt::from_args();
     init_log(
         match (cli_opt.log_trace, cli_opt.log_debug, cli_opt.log_quiet) {
@@ -519,7 +378,23 @@ fn main() {
                 player_id: player_id.unwrap_or(Nat::from(0)),
             };
             info!("Connecting to IC canister: {:?}", cfg);
-            do_event_loop(&cfg, recv_ev).unwrap()
+            let (send_ev, recv_ev) = crossbeam::channel::unbounded();
+            let key_infos = Arc::new(RwLock::new(vec![]));
+            // Start a timer and query state.
+            std::thread::spawn({
+                let cfg = cfg.clone();
+                let cfg = cfg.clone();
+                let key_infos = Arc::clone(&key_infos);
+                move || {
+                    let sys = System::new("updater");
+                    let _trigger =
+                        Trigger::create(|_context| Trigger::new(cfg, send_ev, key_infos));
+
+                    sys.run().unwrap();
+                }
+            });
+
+            do_event_loop(&cfg, recv_ev, key_infos).unwrap()
         }
     }
 }

@@ -1,4 +1,18 @@
+#![allow(unused_imports)]
+use clap::Shell;
 /// Types of data sent to and from the game server canister.
+use structopt::StructOpt;
+
+use candid::{Decode, Encode};
+use delay::Delay;
+use ic_agent::{Agent, AgentConfig, Blob, CanisterId};
+use log::*;
+use num_traits::cast::ToPrimitive;
+use sdl2::event::Event as SysEvent; // not to be confused with our own definition
+use sdl2::event::WindowEvent;
+use sdl2::keyboard::Keycode;
+use std::io;
+use std::time::Duration;
 
 pub type Nat = candid::Nat;
 
@@ -34,6 +48,68 @@ pub mod lang {
         String(String),
     }
 }
+
+#[derive(StructOpt, Debug, Clone)]
+pub enum CliCommand {
+    #[structopt(
+        name = "completions",
+        about = "Generate shell scripts for auto-completions."
+    )]
+    Completions { shell: Shell },
+    #[structopt(
+        name = "connect",
+        about = "Connect to a canister as an IC game server."
+    )]
+    Connect {
+        replica_url: String,
+        canister_id: String,
+        player_id: Option<PlayerId>,
+    },
+}
+
+/// Messages that go from this terminal binary to the server cansiter
+#[derive(Debug, Clone)]
+pub enum ServerCall {
+    // to do -- include the local clock, or a duration since last tick;
+    // we don't have time in the server
+    Tick,
+
+    WindowSizeChange(render::Dim),
+
+    // to do -- more generally, query msg that projects events' outcome
+    QueryKeyDown(Vec<event::KeyEventInfo>),
+
+    // to do -- more generally, update msg that pushes events
+    UpdateKeyDown(Vec<event::KeyEventInfo>),
+}
+
+/// Connection configuration
+#[derive(Debug, Clone)]
+pub struct ConnectConfig {
+    pub cli_opt: CliOpt,
+    pub canister_id: String,
+    pub replica_url: String,
+    pub player_id: PlayerId,
+}
+
+/// Internet Computer Game Terminal (icgt)
+#[derive(StructOpt, Debug, Clone)]
+#[structopt(name = "icgt", raw(setting = "clap::AppSettings::DeriveDisplayOrder"))]
+pub struct CliOpt {
+    /// Enable tracing -- the most verbose log.
+    #[structopt(short = "t", long = "trace-log")]
+    pub log_trace: bool,
+    /// Enable logging for debugging.
+    #[structopt(short = "d", long = "debug-log")]
+    pub log_debug: bool,
+    /// Disable most logging, if not explicitly enabled.
+    #[structopt(short = "q", long = "quiet-log")]
+    pub log_quiet: bool,
+    #[structopt(subcommand)]
+    pub command: CliCommand,
+}
+
+pub type PlayerId = candid::Nat;
 
 /// Game terminal to game server:
 ///

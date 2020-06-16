@@ -1,12 +1,13 @@
 // CLI: Representation and processing:
 use clap::Shell;
 
-extern crate structopt;
 use structopt::StructOpt;
 
+use actix::prelude::*;
 use candid::{Decode, Encode, Nat};
 use delay::Delay;
 use ic_agent::{Agent, AgentConfig, Blob, CanisterId};
+use icgt::updater::Trigger;
 use log::*;
 use num_traits::cast::ToPrimitive;
 use sdl2::event::Event as SysEvent; // not to be confused with our own definition
@@ -245,7 +246,7 @@ fn translate_system_event(event: SysEvent) -> Option<event::Event> {
                 }
             };
             let event = event::Event::KeyDown(event::KeyEventInfo {
-                key: key,
+                key,
                 // to do -- translate modifier keys,
                 alt: false,
                 ctrl: false,
@@ -289,8 +290,9 @@ pub fn redraw<T: RenderTarget>(
     Ok(())
 }
 
-pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
+pub fn do_event_loop(cfg: &ConnectConfig, tick_ev: crossbeam::Receiver<()>) -> Result<(), String> {
     use sdl2::event::EventType;
+
     let mut do_update = true;
     let mut key_infos = vec![];
     let mut window_dim = render::Dim {
@@ -335,6 +337,25 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
     event_pump.disable_event(EventType::MouseMotion);
 
     'running: loop {
+        // Is it time for an update? Do not block; check for an event.
+        let update_event = tick_ev.try_recv();
+
+        match update_event {
+            Ok(()) => {
+                // let's query state now and redraw!
+                // TODO(eftychis): Rethink this!
+                do_update = true;
+                // key_infos.push(ke_info.clone());
+                let rr = server_call(cfg, &ServerCall::UpdateKeyDown(key_infos.clone()))?;
+                key_infos = vec![];
+
+                redraw(&mut canvas, &window_dim, &rr)?;
+            }
+            Err(_) => {
+                // No event
+            }
+        };
+        // TODO(): Here we are waiting for events!!! We need to time out perhaps?
         let event = translate_system_event(event_pump.wait_event());
         let event = match event {
             None => continue 'running,
@@ -365,17 +386,16 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
                     do_update = false;
                     key_infos.push(ke_info.clone());
                     server_call(cfg, &ServerCall::QueryKeyDown(key_infos.clone()))?
+                } else if !do_update {
+                    do_update = true;
+                    key_infos.push(ke_info.clone());
+                    let rr = server_call(cfg, &ServerCall::UpdateKeyDown(key_infos.clone()))?;
+                    key_infos = vec![];
+                    rr
                 } else {
-                    if do_update == false {
-                        do_update = true;
-                        key_infos.push(ke_info.clone());
-                        let rr = server_call(cfg, &ServerCall::UpdateKeyDown(key_infos.clone()))?;
-                        key_infos = vec![];
-                        rr
-                    } else {
-                        server_call(cfg, &ServerCall::UpdateKeyDown(vec![ke_info.clone()]))?
-                    }
+                    server_call(cfg, &ServerCall::UpdateKeyDown(vec![ke_info.clone()]))?
                 };
+
                 redraw(&mut canvas, &window_dim, &rr)?;
             }
         };
@@ -461,6 +481,15 @@ pub fn server_call(cfg: &ConnectConfig, call: &ServerCall) -> Result<render::Res
 }
 
 fn main() {
+    let (send_ev, recv_ev) = crossbeam::channel::unbounded();
+    // Start a timer and query state.
+    std::thread::spawn(move || {
+        let sys = System::new("updater");
+        let _trigger = Trigger::create(|_context| Trigger::new(Box::new(|_| ()), send_ev));
+
+        sys.run().unwrap();
+    });
+
     let cli_opt = CliOpt::from_args();
     init_log(
         match (cli_opt.log_trace, cli_opt.log_debug, cli_opt.log_quiet) {
@@ -490,7 +519,7 @@ fn main() {
                 player_id: player_id.unwrap_or(Nat::from(0)),
             };
             info!("Connecting to IC canister: {:?}", cfg);
-            do_event_loop(&cfg).unwrap()
+            do_event_loop(&cfg, recv_ev).unwrap()
         }
     }
 }

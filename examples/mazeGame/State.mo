@@ -23,7 +23,7 @@ module {
     {
       var maze = st.maze ;
       var won = st.won ;
-      var player = Array.map(clonePlayer, st.player);
+      var player = Array.transform(st.player, clonePlayer);
     }
   };
 

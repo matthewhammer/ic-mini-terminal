@@ -20,27 +20,27 @@ actor {
     Debug.print (" - playerId " # debug_show playerId);
     Debug.print (debug_show dim);
     windowDim := dim;
-    redrawScreen(gameState, false, #ok)
+    redrawScreen(gameState, playerId, false, #ok)
   };
 
   public func updateKeyDown(playerId:Nat, keys:[Types.KeyInfo]) : async Types.ResOut {
     Debug.print "updateKeyDown";
     Debug.print (" - playerId " # debug_show playerId);
-    State.keyDownSeq(gameState, keys);
-    redrawScreen(gameState, false, #ok)
+    State.keyDownSeq(gameState, playerId, keys);
+    redrawScreen(gameState, playerId, false, #ok)
   };
 
   public query func queryKeyDown(playerId:Nat, keys:[Types.KeyInfo]) : async Types.ResOut {
     Debug.print "queryKeyDown";
     Debug.print (" - playerId " # debug_show playerId);
     let temp = State.clone(gameState);
-    State.keyDownSeq(temp, keys);
-    redrawScreen(temp, true, #ok)
+    State.keyDownSeq(temp, playerId, keys);
+    redrawScreen(temp, playerId, true, #ok)
   };
 
-  func redrawScreen(state:Types.State, isQueryView:Bool, status:{#ok; #err}) : Types.ResOut {
+  func redrawScreen(state:Types.State, playerId:Nat, isQueryView:Bool, status:{#ok; #err}) : Types.ResOut {
     // to do -- use the window dimensions in the drawing logic (?)
-    let elm = Draw.drawState(state, isQueryView);
+    let elm = Draw.drawState(state, playerId, isQueryView);
     let rs : Render.Out = #redraw([("screen", elm)]);
     switch status {
       case (#ok) { #ok(rs) };

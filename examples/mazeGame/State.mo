@@ -2,6 +2,7 @@ import Result "mo:base/Result";
 import List "mo:base/List";
 import Render "mo:redraw/Render";
 import Types "Types";
+import Array "mo:base/Array";
 
 module {
 
@@ -9,22 +10,29 @@ module {
   type Dir2D = Types.Dir2D;
   type Pos = Types.Pos;
   type Tile = Types.Tile;
+  type Player = Types.PlayerState;
 
-  public func clone(st:State) : State {
+  public func clonePlayer(pst:Player) : Player {
     {
-      var keys = st.keys ;
-      var maze = st.maze ;
-      var pos = st.pos ;
-      var won = st.won ;
+      var keys = pst.keys;
+      var pos  = pst.pos;
     }
   };
 
-  public func keyDown(st:State, key:Types.KeyInfo) {
+  public func clone(st:State) : State {
+    {
+      var maze = st.maze ;
+      var won = st.won ;
+      var player = Array.map(clonePlayer, st.player);
+    }
+  };
+
+  public func keyDown(st:State, playerId:Nat, key:Types.KeyInfo) {
     let r = switch (key.key) {
-      case "ArrowLeft"  move(st, #left);
-      case "ArrowRight" move(st, #right);
-      case "ArrowUp"    move(st, #up);
-      case "ArrowDown"  move(st, #down);
+      case "ArrowLeft"  move(st, playerId, #left);
+      case "ArrowRight" move(st, playerId, #right);
+      case "ArrowUp"    move(st, playerId, #up);
+      case "ArrowDown"  move(st, playerId, #down);
       case _  { #err(()) };
     };
     // ignore errors for now
@@ -34,8 +42,8 @@ module {
     }
   };
 
-  public func keyDownSeq(st:State, keys:[Types.KeyInfo]) {
-    for (key in keys.vals()) { keyDown(st, key) };
+  public func keyDownSeq(st:State, pid:Nat, keys:[Types.KeyInfo]) {
+    for (key in keys.vals()) { keyDown(st, pid, key) };
   };
 
   public func getTile(st:State, pos:Pos) : ?Tile {
@@ -51,7 +59,7 @@ module {
 
   public func setTile(st:State, pos:Pos, newTile:Tile) : ?Tile {
     let room = st.maze.rooms[pos.room];
-    // address y pos (row), then x pos (column):
+    // address y pos (row), then x pos (column): 
     if (pos.tile.1 < room.height and pos.tile.0 < room.width) {
       let oldTile = room.tiles[pos.tile.1][pos.tile.0];
       room.tiles[pos.tile.1][pos.tile.0] := newTile;
@@ -61,12 +69,12 @@ module {
     }
   };
 
-  public func getNeighborTile(st:State, dir:Dir2D) : ?Tile {
-    getTile(st, movePos(st.pos, dir))
+  public func getNeighborTile(st:State, pid:Nat, dir:Dir2D) : ?Tile {
+    getTile(st, movePos(st.player[pid - 1].pos, dir))
   };
 
-  public func updateNeighborTile(st:State, dir:Dir2D, tile:Tile) : ?Tile {
-    setTile(st, movePos(st.pos, dir), tile)
+  public func updateNeighborTile(st:State, pid:Nat, dir:Dir2D, tile:Tile) : ?Tile {
+    setTile(st, movePos(st.player[pid - 1].pos, dir), tile)
   };
 
   public func posEq(pos1:Pos, pos2:Pos) : Bool {
@@ -75,32 +83,53 @@ module {
     pos1.tile.1 == pos2.tile.1
   };
 
-  public func move(st:State, dir:Dir2D) : Result.Result<(), ()> {
-    if (posEq(movePos(st.pos, dir), st.pos)) {
+  public func move(st:State, pid:Nat, dir:Dir2D) : Result.Result<(), ()> {
+    if (posEq(movePos(st.player[pid - 1].pos, dir), st.player[pid - 1].pos)) {
       return #err(())
     };
-    switch (getNeighborTile(st, dir)) {
+    switch (getNeighborTile(st, pid, dir)) {
       case null {
              #err(())
            };
       case (?#floor) {
-             st.pos := movePos(st.pos, dir);
+             st.player[pid - 1].pos := movePos(st.player[pid - 1].pos, dir);
              #ok(())
            };
       case (?#key(id)) {
-             ignore updateNeighborTile(st, dir, #floor);
-             st.pos := movePos(st.pos, dir);
-             st.keys := ?(id, st.keys);
-             #ok(())
+             switch id {
+               case null {
+                      ignore updateNeighborTile(st, pid, dir, #floor);
+                      st.player[pid - 1].pos := movePos(st.player[pid - 1].pos, dir);
+                      st.player[pid - 1].keys := ?(id, st.player[pid - 1].keys);
+                      #ok(())
+                    };
+               case (?x) {
+                      if (x == pid) {
+                        // take the key ==> the key is replaced with floor
+                        ignore updateNeighborTile(st, pid, dir, #floor);
+                        st.player[pid - 1].pos := movePos(st.player[pid - 1].pos, dir);
+                        st.player[pid - 1].keys := ?(id, st.player[pid - 1].keys);
+                        #ok(())
+                      } else {
+                        // not our key ==> walk over key, but key stays in maze
+                        st.player[pid - 1].pos := movePos(st.player[pid - 1].pos, dir);
+                        #ok(())
+                      }
+                    };
+           }
            };
       case (?#lock(id)) {
-             switch (st.keys) {
+             switch (st.player[pid - 1].keys) {
              case null { #err(()) };
              case (?(_key, keys)) {
-                    ignore updateNeighborTile(st, dir, #floor);
+                    switch _key {
+                      case null { assert true };
+                      case (?x) { assert (pid == x) };
+                    };
+                    ignore updateNeighborTile(st, pid, dir, #floor);
                     // use last key; to do: search for matching keys by Id...
-                    st.keys := keys;
-                    st.pos := movePos(st.pos, dir);
+                    st.player[pid - 1].keys := keys;
+                    st.player[pid - 1].pos := movePos(st.player[pid - 1].pos, dir);
                     #ok(())
                   };
              }
@@ -113,20 +142,20 @@ module {
            };
       case (?#goal) {
              st.won := true;
-             st.pos := movePos(st.pos, dir);
+             st.player[pid - 1].pos := movePos(st.player[pid - 1].pos, dir);
              #ok(())
            };
       case (?#start) {
-             st.pos := movePos(st.pos, dir);
+             st.player[pid - 1].pos := movePos(st.player[pid - 1].pos, dir);
              #ok(())
            };
       case (?#outward(newPos)) {
              // teleport!
-             st.pos := newPos;
+             st.player[pid - 1].pos := newPos;
              #ok(())
            };
       case (?#inward(_)) {
-             st.pos := movePos(st.pos, dir);
+             st.player[pid - 1].pos := movePos(st.player[pid - 1].pos, dir);
              #ok(())
            };
     }
@@ -144,9 +173,9 @@ module {
       tile=newTilePos }
   };
 
-  public func multiMove(st:State, dirs:[Dir2D]) : Result.Result<(), ()> {
+  public func multiMove(st:State, pid:Nat, dirs:[Dir2D]) : Result.Result<(), ()> {
     for (dir in dirs.vals()) {
-      switch (move(st, dir)) {
+      switch (move(st, pid, dir)) {
         case (#ok(())) { };
         case (#err(())) { return #err(()) };
       };
@@ -161,8 +190,8 @@ module {
     let g = #goal;
     let f = #floor;
     let w = #wall;
-    let l = #lock;
-    let k = #key;
+    let l = #lock(null);
+    let k = #key(null);
     let i = #inward;
 
     let startPos = { room = 0;
@@ -204,31 +233,36 @@ module {
       [ var w, f, k, w,  k, k, f, w,  k, k, f, w ],
       [ var x, w, w, w,  w, w, w, x,  w, w, w, x ],
     ];
-    {
-      var keys = List.nil<()>();
-      var won = false;
-      var pos = startPos;
-      var maze : Types.Maze =
+    
+    let maze_ : Types.Maze = {
+      start = startPos;
+      rooms = [
         {
-          start = startPos;
-          rooms = [
-            {
-              width=5;
-              height=5;
-              tiles=room0Tiles;
-            },
-            {
-              width=6;
-              height=7;
-              tiles=room1Tiles;
-            },
-            {
-              width=12;
-              height=13;
-              tiles=room2Tiles;
-            }
-          ];
+          width=5;
+          height=5;
+          tiles=room0Tiles;
+        },
+        {
+          width=6;
+          height=7;
+          tiles=room1Tiles;
+        },
+        {
+          width=12;
+          height=13;
+          tiles=room2Tiles;
         }
+      ]
+    }; 
+    // to do -- this let binding should be permitted in the record below
+    let noKeys : List.List<?Nat> = null;
+    {
+      var player = [
+        { var keys = noKeys; var pos = startPos } : Types.PlayerState,
+        { var keys = noKeys; var pos = startPos } : Types.PlayerState
+      ];
+      var won = false;
+      var maze : Types.Maze = maze_
     }
   };
 }

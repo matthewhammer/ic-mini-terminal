@@ -55,9 +55,13 @@ public type PlayerState = {
 
 // full game state:
 public type State = {
-  var player: [PlayerState];
   var maze: Maze;
   var won: Bool;
+  // Before:
+  //   var keys: List.List<()>;
+  //   var pos: Pos;
+  // Now:
+ var player: [PlayerState];
 };
 
 // move results back to game client:

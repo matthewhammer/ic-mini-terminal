@@ -212,8 +212,8 @@ pub fn draw_elm<T: RenderTarget>(
     }
 }
 
-fn translate_system_event(event: SysEvent) -> Option<event::Event> {
-    match &event {
+fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
+    match event {
         SysEvent::Window {
             win_event: WindowEvent::SizeChanged(w, h),
             ..
@@ -321,7 +321,7 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
         .present_vsync()
         .build()
         .map_err(|e| e.to_string())?;
-    info!("Using SDL_Renderer \"{}\"", canvas.info().name);
+    info!("SDL canvas.info().name => \"{}\"", canvas.info().name);
 
     {
         let rr: render::Result =
@@ -337,11 +337,13 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
     event_pump.disable_event(EventType::MouseMotion);
 
     'running: loop {
-        let event = translate_system_event(event_pump.wait_event());
+        let system_event = event_pump.wait_event();
+        let event = translate_system_event(&system_event);
         let event = match event {
             None => continue 'running,
             Some(event) => event,
         };
+        trace!("SDL event_pump.wait_event() => {:?}", &system_event);
         // catch window resize event: redraw and loop:
         match event {
             event::Event::WindowSizeChange(new_dim) => {
@@ -431,11 +433,11 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
             ))
         }
         ServerCall::QueryKeyDown(_keys) => {
-            Ok(Some(runtime.block_on(agent.query(
+            Ok(runtime.block_on(agent.query(
                 &canister_id,
                 &"queryKeyDown",
                 &Blob(arg_bytes),
-            )).unwrap()))
+            )).unwrap())
         },
         ServerCall::UpdateKeyDown(_keys) => {
             runtime.block_on(agent.call_and_wait(
@@ -447,7 +449,7 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
         },
     };
     let elapsed = timestamp.elapsed().unwrap();
-    if let Ok(Some(blob_res)) = blob_res {
+    if let Ok(blob_res) = blob_res {
         info!("server_call: Ok: Response size {:?} bytes; elapsed time {:?}", 
               blob_res.0.len(), elapsed);
         match Decode!(&(*blob_res.0), render::Result) {

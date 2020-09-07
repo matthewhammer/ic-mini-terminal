@@ -1,0 +1,31 @@
+name: "build"
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+jobs:
+  tests:
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: actions/checkout@v2
+    - name: "install dfx"
+      run: |
+       wget https://sdk.dfinity.org/install.sh
+       echo DFX_VERSION=0.6.0
+       yes Y | DFX_VERSION=0.6.0 sh install.sh
+       echo "::add-path::/home/runner/bin"
+    - name: "dfx cache install"
+      run: dfx cache install
+    - name: "install vessel"
+      run: wget --output-document /home/runner/bin/vessel https://github.com/kritzcreek/vessel/releases/download/v0.4.1/vessel-linux64 && chmod +x /home/runner/bin/vessel
+    - name: "install candid tool"
+      run: wget --output-document /home/runner/bin/candiff https://github.com/dfinity/candid/releases/download/2020-08-18/candiff-linux64 && chmod +x /home/runner/bin/candiff
+    - name: "candiff help (sanity check)"
+      run: candiff --help
+    - name: "install didc tool"
+      run: wget --output-document /home/runner/bin/didc https://github.com/dfinity/candid/releases/download/2020-08-18/didc-linux64 && chmod +x /home/runner/bin/didc
+    - name: "didc help (sanity check)"
+      run: didc --help
+    - name: "test"
+      run: ./test.sh

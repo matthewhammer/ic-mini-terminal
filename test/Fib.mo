@@ -1,6 +1,6 @@
-import Result "mo:base/result";
-import Array "mo:base/array";
-import I "mo:base/iter";
+import Result "mo:base/Result";
+import Array "mo:base/Array";
+import I "mo:base/Iter";
 import Debug "mo:base/Debug";
 import P "mo:base/Prelude";
 import Render "mo:redraw/Render";

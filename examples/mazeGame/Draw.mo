@@ -150,7 +150,7 @@ module {
     switch (st.keys) {
       case null { tr.textAtts("none", attsLegendTextHi()) };
       case (?_) {
-             List.iter<()>(st.keys,
+             List.iterate<()>(st.keys,
                func (_:()) {
                  r.begin(#flow(vert));
                  tr.textAtts("ķ", attsLegendFg(#closed((255, 255, 100))));

@@ -133,9 +133,11 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 pub fn agent(url: &str) -> Result<Agent, IcgtError> {
     //use ring::signature::Ed25519KeyPair;
     use ic_agent::agent::AgentConfig;
-    let rng = rand::SystemRandom::new();
-    let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng)?;
-    let key_pair = signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
+    use ring::rand::SystemRandom;
+
+    let rng = SystemRandom::new();
+    let pkcs8_bytes = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)?;
+    let key_pair = ring::signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
     let ident = ic_agent::identity::BasicIdentity::from_key_pair(key_pair);
     let agent = Agent::new(AgentConfig {
         identity: Box::new(ident),

@@ -41,8 +41,10 @@ The `connect` subcommand sends messages to a _graphics server canister_
 hosted on the replica:
 
 ```
-cargo run -- connect 127.0.0.1:8000 ic:06AB8F2EB9EB6699D6
+cargo run -- connect 127.0.0.1:8000 `dfx canister id mazeGame`
 ```
+
+Notice how `dfx canister id` gets the canister's identity for the terminal connection from the canister's name `mazeGame`.
 
 The test canisters installed in the steps just above each
 expose this "graphics server" interface.

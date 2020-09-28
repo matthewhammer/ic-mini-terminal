@@ -21,9 +21,6 @@ num-traits = "0.2.6"
 futures = "0.3.5"
 ring = "0.16.15"
 
-## Check out this repo: https://github.com/dfinity-lab/agent-rust/tree/next/ic-agent
-# ic-agent = { path = "/Users/matthew/dfn/agent-rust/ic-agent" }
-# ic-types = { path = "/Users/matthew/dfn/agent-rust/ic-types" }
 ic-agent = "0.1.0"
 ic-types = "0.1.0"
 candid = "0.6.7"

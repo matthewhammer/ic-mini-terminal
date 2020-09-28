@@ -1,14 +1,13 @@
 //extern crate hashcons;
 extern crate sdl2;
 extern crate serde;
-extern crate tokio;
 extern crate icgt;
 extern crate delay;
 extern crate ic_agent;
+extern crate ic_types;
 extern crate num_traits;
+extern crate futures;
 
-#[macro_use]
-extern crate candid;
 
 // Logging:
 #[macro_use]
@@ -22,13 +21,17 @@ use clap::Shell;
 extern crate structopt;
 use structopt::StructOpt;
 
+use ic_agent::Agent;
+use ic_types::Principal;
+use candid::{Encode, Decode};
+
+
 use delay::Delay;
 use sdl2::event::Event as SysEvent; // not to be confused with our own definition
 use sdl2::event::WindowEvent;
 use sdl2::keyboard::Keycode;
 use std::io;
 use std::time::Duration;
-use ic_agent::{Agent, AgentConfig, Blob, CanisterId};
 use candid::Nat;
 use num_traits::cast::ToPrimitive;
 
@@ -90,6 +93,27 @@ pub enum ServerCall {
     UpdateKeyDown(Vec<event::KeyEventInfo>),
 }
 
+/// Errors from the game terminal, or its subcomponents
+pub enum IcgtError {
+    Agent(ic_agent::AgentError),
+    String(String),
+    RingKeyRejected(ring::error::KeyRejected),
+    RingUnspecified(ring::error::Unspecified),
+}
+impl std::convert::From<ic_agent::AgentError> for IcgtError {
+    fn from(ae: ic_agent::AgentError) -> Self { IcgtError::Agent(ae) }
+}
+impl std::convert::From<String> for IcgtError {
+    fn from(s: String) -> Self { IcgtError::String(s) }
+}
+impl std::convert::From<ring::error::KeyRejected> for IcgtError {
+    fn from(r: ring::error::KeyRejected) -> Self { IcgtError::RingKeyRejected(r) }
+}
+impl std::convert::From<ring::error::Unspecified> for IcgtError {
+    fn from(r: ring::error::Unspecified) -> Self { IcgtError::RingUnspecified(r) }
+}
+
+
 fn init_log(level_filter: log::LevelFilter) {
     use env_logger::{Builder, WriteStyle};
     let mut builder = Builder::new();
@@ -105,12 +129,22 @@ use sdl2::render::{Canvas, RenderTarget};
 const RETRY_PAUSE: Duration = Duration::from_millis(100);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
-pub fn agent(url: &str) -> Result<Agent, ic_agent::AgentError> {
-    Agent::new(AgentConfig {
-        url: format!("http://{}", url).as_str(),
+
+pub fn agent(url: &str) -> Result<Agent, IcgtError> {
+    //use ring::signature::Ed25519KeyPair;
+    use ic_agent::agent::AgentConfig;
+    let rng = rand::SystemRandom::new();
+    let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng)?;
+    let key_pair = signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
+    let ident = ic_agent::identity::BasicIdentity::from_key_pair(key_pair);
+    let agent = Agent::new(AgentConfig {
+        identity: Box::new(ident),
+        url: format!("http://{}", url),
         ..AgentConfig::default()
-    })
+    })?;
+    Ok(agent)
 }
+
 
 fn nat_ceil(n:&Nat) -> u32 {
     n.0.to_u32().unwrap()
@@ -264,7 +298,8 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
     }
 }
 
-pub fn redraw<T: RenderTarget>(
+
+pub async fn redraw<T: RenderTarget>(
     canvas: &mut Canvas<T>,
     dim: &render::Dim,
     rr:&render::Result,
@@ -293,7 +328,7 @@ pub fn redraw<T: RenderTarget>(
     Ok(())
 }
 
-pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
+pub async fn do_event_loop(cfg: &ConnectConfig) -> Result<(), IcgtError> {
     use sdl2::event::EventType;
     let mut do_update = true;
     let mut key_infos = vec![];
@@ -325,8 +360,8 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
 
     {
         let rr: render::Result =
-            server_call(cfg, &ServerCall::WindowSizeChange(window_dim.clone()))?;
-        redraw(&mut canvas, &window_dim, &rr)?;
+            server_call(cfg, &ServerCall::WindowSizeChange(window_dim.clone())).await?;
+        redraw(&mut canvas, &window_dim, &rr).await?;
     }
 
     let mut event_pump = sdl_context.event_pump()?;
@@ -349,9 +384,9 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
             event::Event::WindowSizeChange(new_dim) => {
                 debug!("WindowSizeChange {:?}", new_dim);
                 let rr: render::Result =
-                    server_call(cfg, &ServerCall::WindowSizeChange(new_dim.clone()))?;
+                    server_call(cfg, &ServerCall::WindowSizeChange(new_dim.clone())).await?;
                 window_dim = new_dim;
-                redraw(&mut canvas, &window_dim, &rr)?;
+                redraw(&mut canvas, &window_dim, &rr).await?;
                 continue 'running;
             },
             event::Event::Quit => {
@@ -371,39 +406,38 @@ pub fn do_event_loop(cfg: &ConnectConfig) -> Result<(), String> {
                     if ke_info.shift {
                         do_update = false;
                         key_infos.push(ke_info.clone());
-                        server_call(cfg, &ServerCall::QueryKeyDown(key_infos.clone()))?
+                        server_call(cfg, &ServerCall::QueryKeyDown(key_infos.clone())).await?
                     } else {
                         if do_update == false {
                             do_update = true;
                             key_infos.push(ke_info.clone());
-                            let rr = server_call(cfg, &ServerCall::UpdateKeyDown(key_infos.clone()))?;
+                            let rr = server_call(cfg, &ServerCall::UpdateKeyDown(key_infos.clone())).await?;
                             key_infos = vec![];
                             rr
                         } else {
-                            server_call(cfg, &ServerCall::UpdateKeyDown(vec![ke_info.clone()]))?
+                            server_call(cfg, &ServerCall::UpdateKeyDown(vec![ke_info.clone()])).await?
                         }
                     };
-                redraw(&mut canvas, &window_dim, &rr)?;
+                redraw(&mut canvas, &window_dim, &rr).await?;
             },
         };
     }
 }
 
-pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Result, String> {
-    use tokio::runtime::Runtime;
+pub async fn server_call(cfg: &ConnectConfig, call:&ServerCall) ->
+    Result<render::Result, IcgtError>
+{
     debug!(
         "server_call: to canister_id {:?} at replica_url {:?}",
         cfg.canister_id,
         cfg.replica_url
     );
-    let mut runtime = Runtime::new().expect("Unable to create a runtime");
+    let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap(); // xxx
+    let agent = agent(&cfg.replica_url)?;
     let delay = Delay::builder()
         .throttle(RETRY_PAUSE)
         .timeout(REQUEST_TIMEOUT)
         .build();
-    let agent = agent(&cfg.replica_url).unwrap();
-    let canister_id =
-        CanisterId::from_text(cfg.canister_id.clone()).unwrap();
     let timestamp = std::time::SystemTime::now();
     info!("server_call: {:?}", call);
     let arg_bytes = match call {
@@ -417,42 +451,49 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
     // do an update or query call, based on the ServerCall case:
     let blob_res = match call {
         ServerCall::Tick => {
-            runtime.block_on(agent.call_and_wait(
+            /*
+            runtime.block_on(agent.update(
                 &canister_id,
                 &"tick",
                 &Blob(arg_bytes),
                 delay,
             ))
+            */
+            unimplemented!()
         },
         ServerCall::WindowSizeChange(_window_dim) => {
-            runtime.block_on(agent.call_and_wait(
+            let resp = agent.update(
                 &canister_id,
-                &"windowSizeChange",
-                &Blob(arg_bytes),
-                delay,
-            ))
+                &"windowSizeChange")
+                .with_arg(arg_bytes)
+                .call_and_wait(delay)
+                .await?;
+            Some(resp)
         }
         ServerCall::QueryKeyDown(_keys) => {
-            Ok(runtime.block_on(agent.query(
+            let resp = agent.query(
                 &canister_id,
-                &"queryKeyDown",
-                &Blob(arg_bytes),
-            )).unwrap())
+                &"queryKeyDown")
+                .with_arg(arg_bytes)
+                .call()
+                .await?;
+            Some(resp)
         },
         ServerCall::UpdateKeyDown(_keys) => {
-            runtime.block_on(agent.call_and_wait(
+            let resp = agent.update(
                 &canister_id,
-                &"updateKeyDown",
-                &Blob(arg_bytes),
-                delay,
-            ))
+                &"updateKeyDown")
+                .with_arg(arg_bytes)
+                .call_and_wait(delay)
+                .await?;
+            Some(resp)
         },
     };
     let elapsed = timestamp.elapsed().unwrap();
-    if let Ok(blob_res) = blob_res {
-        info!("server_call: Ok: Response size {:?} bytes; elapsed time {:?}", 
-              blob_res.0.len(), elapsed);
-        match Decode!(&(*blob_res.0), render::Result) {
+    if let Some(blob_res) = blob_res {
+        info!("server_call: Ok: Response size {:?} bytes; elapsed time {:?}",
+              blob_res.len(), elapsed);
+        match Decode!(&(*blob_res), render::Result) {
             Ok(res) => {
                 if true {
                     let mut res_log = format!("{:?}", &res);
@@ -465,17 +506,21 @@ pub fn server_call(cfg: &ConnectConfig, call:&ServerCall) -> Result<render::Resu
                 Ok(res)
             },
             Err(candid_err) => {
-                Err(format!("Candid decoding error: {:?}", candid_err))
+                error!("Candid decoding error: {:?}", candid_err);
+                Err(IcgtError::String("decoding error".to_string()))
             }
         }
     } else {
         let res = format!("{:?}", blob_res);
         info!("..error result {:?}", res);
-        Err(format!("do_canister_tick() failed: {:?}", res))
+        Err(IcgtError::String("tick error".to_string()))
     }
 }
 
 fn main() {
+    use tokio::runtime::Runtime;
+    let mut runtime = Runtime::new().expect("Unable to create a runtime");
+
     let cli_opt = CliOpt::from_args();
     init_log(
         match (cli_opt.log_trace, cli_opt.log_debug, cli_opt.log_quiet) {
@@ -500,7 +545,7 @@ fn main() {
                 cli_opt,
             };
             info!("Connecting to IC canister: {:?}", cfg);
-            do_event_loop(&cfg).unwrap()
+            runtime.block_on(do_event_loop(&cfg)).ok();
         }
     }
 }

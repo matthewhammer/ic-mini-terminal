@@ -1,8 +1,8 @@
 # IC Game Terminal
 
-Simple keyboard input (⌨) and graphical output (📺) for the Internet Computer.
+Simple, direct keyboard input (⌨) and graphical output (📺) for programs on the [Internet Computer](https://dfinity.org/).
 
-For playing games, viewing graphics and more.
+For creating interactive graphics and games.
 
 
 ## Building and testing
@@ -16,25 +16,28 @@ For playing games, viewing graphics and more.
 
 Use `dfx` and `vessel` to build and run the test canister.
 
- * First, in one terminal:
+First, in one terminal:
+
 ```
 dfx start
 ```
 
- * Then, in another terminal:
+Then, in another terminal:
+
 ```
+dfx canister create --all
 dfx build
 dfx canister install --all
 ```
 
- * Last, use the canister ID printed back on the terminal to connect `icgt`
+Last, choose a canister to act as the graphics server and connect via `icgt`:
 
 
 ### Run the tool
 
 Use `cargo` to build and run the `icgt` tool.
 
-The `connect` subcommand sends messages to a _game server canister_
+The `connect` subcommand sends messages to a _graphics server canister_
 hosted on the replica:
 
 ```
@@ -42,22 +45,24 @@ cargo run -- connect 127.0.0.1:8000 ic:06AB8F2EB9EB6699D6
 ```
 
 The test canisters installed in the steps just above each
-expose this "game server" interface.
+expose this "graphics server" interface.
 
 
-### Interact with game server
+### Interact with graphics server
 
-The game server is a canister running on the replica.  It depends on the game terminal for a graphical output window, and for keyboard input.  Additionally, it (currently) relies on the terminal for a source of timing (clock) events, if needed.
+The graphics server is a canister running on the replica.
 
-#### 📺 Graphical output format
+This (remote) canister depends on this (local) terminal for displaying a graphical output window to a human user, and for accepting keyboard input from this user.
 
-Each call to the game server yields a response that contains graphics to render:
+#### Graphical output format
+
+Each call to the graphics server yields a response that contains graphics to render:
 
 ```
   public type Res = Result.Result<Render.Out, Render.Out>;
 ```
 
-The `Render.Out` type represents simple graphics sent from the game server to the terminal, currently defined by [`motoko-redraw`](https://github.com/matthewhammer/motoko-redraw).
+The `Render.Out` type represents simple graphics sent from the graphics server to the terminal, currently defined by [`motoko-redraw`](https://github.com/matthewhammer/motoko-redraw).
 
 There are three game terminal events that precipitate a server call:
 
@@ -71,7 +76,7 @@ windowSizeChange : (dim:Render.Dim) -> async Res
 
 #### 🕒 Time (external clock) advancing
 
-Advance time of the game server, and redraw:
+Advance time of the graphics server, and redraw:
 
 ```
 tick : (duration:Nat) -> async Res
@@ -101,20 +106,51 @@ Each provides a sequences of keyboard key presses:
   type Keys = [Key];
 ```
 
-#### Event semantics and timing
+#### Event semantics
 
 The `tick` and `windowSizeChange` messages indicate time and window geometry events, respectively.
 
 Note: The `tick` command is unused for games without the need of a clock. It's currently NYI.
 
-The `updateKeyDown` and `queryKeyDown` messages are related, and the SHIFT key controls when they are each used:
+The `updateKeyDown` and `queryKeyDown` messages convey a keyboard
+buffer, of type `Keys`.
+
+These two message types each use and influence the local keyboard buffer
+state, in related and complementary ways.
+
+ - sent as an update (and drained), _or_
+ - sent as a query, to be appended and re-sent again later.
+
+Often, there is a large (~10x) difference in response time, permitting the local graphics to repaint (much) faster in response to this updated keyboard buffer.
+
+To do so, the graphics server responds to the query messages by _hypothetically projecting its state forward_ but without committing to it.
+The response to the local terminal looks _as if_ all of the keyboard events in the buffer were really processed.
+In actuality, this buffer is saved locally and resent when it grows or must be committed.
+
+Excessive (or exclusive) use of `queryKeyDown` has limitations, however:
+
+ - It doesn't _acually_ update the graphical server state; rahter, it just queries it, and asks for a forward projection of its state.
+ - Any concurrent, cooperating users cannot observe these forward projection effects.
+ - Each `queryKeyDown` without an `updateKeyDown` must re-communicate buffered keyboard events and must re-process their effects in this forward projection.
+
+The most responsive local behavior should mix these complementary message kinds.
+
+However, the details of this mixing are still
+unclear, so the current implementation permits the user to explicitly
+control the buffer's expansion and draining via a meta keyboard key (SHIFT).
+
+#### Keyboard buffering semantics
+
+The SHIFT key permits the expert user to control how the keyboard
+buffer is drained and sent to the graphics server:
+
 
 * When the interactive user holds down SHIFT key, she **queries** the
-game server via `queryKeyDown` with a key buffer that expands with each new key press,
+graphics server via `queryKeyDown` with a key buffer that expands with each new key press,
 and the server re-runs the graphics processing for each key of
 the buffer each time, and redraws.
 
-* Since it uses only a _query message_ to the game server (not an _update_
+* Since it uses only a _query message_ to the graphics server (not an _update_
 message), this processing is repeated for each key (a quadratic
 expansion, in the limit), but it does not require consensus, so while
 redundant, the overall response time is about *ten times faster* than doing a real update to the server state.
@@ -123,10 +159,10 @@ redundant, the overall response time is about *ten times faster* than doing a re
 resends the buffer plus the new key, and does a real update via `updateKeyDown`.  Now the state change is saved.
 
 
-
 # Inspired by
 
  * [IC-Logo](https://github.com/chenyan2002/ic-logo): A toy [Logo](https://en.wikipedia.org/wiki/Logo_(programming_language))-like language for the Internet Computer.
  * Simple interactive graphics demos and games of [Elm lang](https://elm-lang.org/).
  * Fantasy console [PICO-8](https://www.lexaloffle.com/pico-8.php) ([PICO-8 Manual](https://www.lexaloffle.com/pico8_manual.txt)).
  * [Languages of Play: Towards semantic foundations for game interfaces](https://arxiv.org/abs/1703.05410) ([Chris Martens](https://sites.google.com/ncsu.edu/cmartens) and Matthew Hammer, March 2017).
+ * [Lock-Step Simulation Is Child’s Play (Experience Report)](https://www.joachim-breitner.de/publications/CodeWorld-ICFP17.pdf) ([Joachim Breitner](https://www.joachim-breitner.de/blog) and [Chris Smith](https://github.com/cdsmith))

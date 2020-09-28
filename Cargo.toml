@@ -2,6 +2,7 @@
 name = "icgt"
 version = "0.1.0"
 authors = ["Matthew A Hammer <pubmah@nym.hush.com>"]
+edition = "2018"
 
 [dependencies]
 clap = "2.33"
@@ -13,14 +14,19 @@ serde_bytes = "0.11"
 serde_cbor = "0.9"
 serde_json = "1.0"
 sdl2 = "0.32"
-tokio = "0.2.10"
-delay = "0.1.0"
-candid = { git = "https://github.com/dfinity/candid" }
+tokio = "0.2.22"
+delay = "0.3.0"
 num-bigint = "0.2.6"
 num-traits = "0.2.6"
+futures = "0.3.5"
+ring = "0.16.15"
 
-## DFINITY Engineers: Update this line for your checkout of the SDK repo:
-ic-agent = { path = "/Users/matthew/dfn/sdk/src/agent/rust" }
+## Check out this repo: https://github.com/dfinity-lab/agent-rust/tree/next/ic-agent
+# ic-agent = { path = "/Users/matthew/dfn/agent-rust/ic-agent" }
+# ic-types = { path = "/Users/matthew/dfn/agent-rust/ic-types" }
+ic-agent = "0.1.0"
+ic-types = "0.1.0"
+candid = "0.6.7"
 
 [lib]
 name = "icgt"

@@ -18,6 +18,9 @@
     },
     "mazeGame": {
       "main": "examples/mazeGame/Main.mo"
+    },
+    "textEdit": {
+      "main": "examples/textEdit/Main.mo"
     }
   },
   "defaults": {

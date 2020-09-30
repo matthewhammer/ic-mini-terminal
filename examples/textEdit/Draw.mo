@@ -4,6 +4,10 @@ import Render "mo:redraw/Render";
 import Mono5x5 "mo:redraw/glyph/Mono5x5";
 import Types "Types";
 
+import TextSeq "mo:sequence/Text";
+import Seq "mo:sequence/Sequence";
+import Stream "mo:sequence/Stream";
+
 module {
 
   public type State = Types.State;
@@ -59,6 +63,12 @@ module {
   func taTitleText() : Atts =
     attsLegendFg(#closed((240, 200, 255)));
 
+  func userTextAtts() : Atts =
+    attsFgBg(#closed((100, 250, 100)), #closed((0, 0, 0)));
+
+  func cursorAtts() : Atts =
+    attsFgBg(#closed((200, 250, 200)), #closed((0, 0, 0)));
+
   // Fill / Atts names --------------------------------------------------------
 
   func bgFill() : Render.Fill = #closed((50, 10, 50));
@@ -88,9 +98,18 @@ module {
 
     // Title line:
     let queryViewMsg = if isQueryView " (q)" else "";
-    
+
     r.begin(#flow(horz));
     tr.textAtts("Hello world" # queryViewMsg, taTitleText());
+    r.end();
+    let (textBefore, textAfter) = (
+      TextSeq.toText(st.bwd),
+      TextSeq.toText(st.fwd),
+    );
+    r.begin(#flow(horz));
+    tr.textAtts(textBefore, userTextAtts());
+    tr.textAtts("*", cursorAtts());
+    tr.textAtts(textAfter, userTextAtts());
     r.end();
 
     r.end(); // Display end

@@ -4,6 +4,7 @@ import Render "mo:redraw/Render";
 
 import TextSeq "mo:sequence/Text";
 import Seq "mo:sequence/Sequence";
+import Stream "mo:sequence/Stream";
 
 module {
 
@@ -27,9 +28,13 @@ public type Elm = {
   // more later
 };
 
+public type Levels = Seq.Stream<Stream.Bernoulli.Value>;
+public type TextSeq = TextSeq.TextSeq;
+
 public type State = {
-   // later, generalize to element tree (or element sequence?)
-   var text : TextSeq.TextSeq;
+  levels : Levels;
+  var fwd : TextSeq;
+  var bwd : TextSeq;
 };
 
 // move results back to game client:

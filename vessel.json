@@ -2,5 +2,5 @@
  "name": "icgt-test",
   "repo": "git@github.com:matthewhammer/ic-game-terminal",
   "version": "v0.0.1",
-  "dependencies": ["base", "redraw"]
+  "dependencies": ["base", "redraw", "sequence"]
 }

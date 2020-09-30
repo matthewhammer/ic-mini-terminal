@@ -16,5 +16,11 @@
     "repo": "https://github.com/matthewhammer/motoko-redraw",
     "version": "master",
     "dependencies": ["base", "stand"]
+  },
+  {
+    "name": "sequence",
+    "repo": "https://github.com/matthewhammer/motoko-sequence",
+    "version": "master",
+    "dependencies": ["base"]
   }
 ]

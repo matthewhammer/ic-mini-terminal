@@ -102,16 +102,38 @@ module {
     r.begin(#flow(horz));
     tr.textAtts("Hello world" # queryViewMsg, taTitleText());
     r.end();
-    let (textBefore, textAfter) = (
-      TextSeq.toText(st.bwd),
-      TextSeq.toText(st.fwd),
+    func isNewline(c : Text) : Bool = {
+      c == "\n"
+    };
+    let (linesBefore, linesAfter) = (
+      TextSeq.flatten(Seq.tokens(st.bwd, isNewline, st.levels)),
+      TextSeq.flatten(Seq.tokens(st.fwd, isNewline, st.levels)),
     );
+    r.begin(#flow(vert));
     r.begin(#flow(horz));
-    tr.textAtts(textBefore, userTextAtts());
+    var first = true;
+    for (tok in Seq.iter(linesBefore, #fwd)) {
+      if first {
+        first := false
+      } else {
+        r.end();
+        r.begin(#flow(horz));
+      };
+      tr.textAtts(tok, userTextAtts());
+    };
     tr.textAtts("*", cursorAtts());
-    tr.textAtts(textAfter, userTextAtts());
+    first := true;
+    for (tok in Seq.iter(linesAfter, #fwd)) {
+      if first {
+        first := false
+      } else {
+        r.end();
+        r.begin(#flow(horz));
+      };
+      tr.textAtts(tok, userTextAtts());
+    };
     r.end();
-
+    r.end();
     r.end(); // Display end
     r.getElm()
   };

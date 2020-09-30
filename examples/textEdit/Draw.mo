@@ -121,6 +121,16 @@ module {
       };
       tr.textAtts(tok, userTextAtts());
     };
+    // edge case: newline char is immediately to left of cursor (begin next line)
+    switch (Seq.peekBack(st.bwd)) {
+      case (?lastChar) {
+             if (isNewline(lastChar)) {
+               r.end();
+               r.begin(#flow(horz));
+             };
+           };
+      case _ { };
+    };
     tr.textAtts("*", cursorAtts());
     first := true;
     for (tok in Seq.iter(linesAfter, #fwd)) {

@@ -19,7 +19,7 @@ module {
       case "ArrowRight" move(st, #right);
       case "ArrowUp"    move(st, #up);
       case "ArrowDown"  move(st, #down);
-      case "BackSpace"  delete(st, #bwd);
+      case "Backspace"  delete(st, #bwd);
       case "Delete"     delete(st, #fwd);
       case "Tab" insert(st, #text("\t"));
       case " " insert(st, #text(" "));
@@ -125,9 +125,71 @@ module {
 
   // to do ---------------------------------------
 
+  // moveVert moves (just) past the nearest newline character, forward or backward
+  // (to do -- this behavior is good enough for now, but isn't what people expect).
+
+  func moveVert(st : State, dir : {#fwd; #bwd}) {
+    var column : ?Nat = null;
+    switch dir {
+    case (#fwd) {
+           switch (Seq.peekFront(st.fwd)) {
+             case null { };
+             case (?f) {
+                    if (f == "\n") {
+                      move(st, #right)
+                    }
+                    else {
+                      move(st, #right);
+                      moveVert(st, dir)
+                    }
+                  };
+           }
+         };
+    case (#bwd) {
+           switch (Seq.peekBack(st.bwd)) {
+             case null { };
+             case (?b) {
+                    if (b == "\n") {
+                      move(st, #left)
+                    }
+                    else {
+                      move(st, #left);
+                      moveVert(st, dir)
+                    }
+                  };
+           }
+         };
+    }
+  };
+
   func move(st : State, dir : Types.Dir2D) {
     Debug.print ("State.move" # debug_show dir);
-    // to do
+    switch dir {
+      case (#left) {
+             switch (Seq.popBack(st.bwd)) {
+               case (?(bwd, l)) {
+                      st.bwd := bwd;
+                      st.fwd := Seq.pushFront(l, st.levels.next(), st.fwd)
+                    };
+               case null {
+                      // to do -- cannot move; terminal bell?
+                    };
+             }
+           };
+      case (#right) {
+             switch (Seq.popFront(st.fwd)) {
+               case (?(l, fwd)) {
+                      st.fwd := fwd;
+                      st.bwd := Seq.pushBack(st.bwd, st.levels.next(), l)
+                    };
+               case null {
+                      // to do -- cannot move; terminal bell?
+                    };
+             }
+           };
+      case (#up) { moveVert(st, #bwd) };
+      case (#down) { moveVert(st, #fwd) };
+    }
   };
 
   func insert(st : State, elm : Types.Elm) {
@@ -141,7 +203,20 @@ module {
 
   func delete(st : State, dir : {#fwd; #bwd}) {
     Debug.print ("State.delete" # debug_show dir);
-    // to do
+    switch dir {
+      case (#bwd) {
+             switch (Seq.popBack(st.bwd)) {
+               case (?(bwd, _)) { st.bwd := bwd };
+               case _ { };
+             }
+           };
+      case (#fwd) {
+             switch (Seq.popFront(st.fwd)) {
+               case (?(_, fwd)) { st.fwd := fwd };
+               case _ { };
+             }
+           };
+    }
   };
 
 }

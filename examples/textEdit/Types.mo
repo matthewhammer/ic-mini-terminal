@@ -22,7 +22,13 @@ public type KeyInfo = {
   shift: Bool
 };
 
+public type Elm = {
+  #text : Text
+  // more later
+};
+
 public type State = {
+   // later, generalize to element tree (or element sequence?)
    var text : TextSeq.TextSeq;
 };
 

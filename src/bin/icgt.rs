@@ -270,6 +270,10 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
             keymod,
             ..
         } => {
+            let shift = 
+                keymod.contains(sdl2::keyboard::Mod::LSHIFTMOD) ||
+                keymod.contains(sdl2::keyboard::Mod::RSHIFTMOD)
+                ;
             let key = match &kc {
                 Keycode::Tab => "Tab".to_string(),
                 Keycode::Space => " ".to_string(),
@@ -279,33 +283,95 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
                 Keycode::Up => "ArrowUp".to_string(),
                 Keycode::Down => "ArrowDown".to_string(),
                 Keycode::Backspace => "Backspace".to_string(),
-                Keycode::LShift => "LShift".to_string(),
-                Keycode::A => "a".to_string(),
-                Keycode::B => "b".to_string(),
-                Keycode::C => "c".to_string(),
-                Keycode::D => "d".to_string(),
-                Keycode::E => "e".to_string(),
-                Keycode::F => "f".to_string(),
-                Keycode::G => "g".to_string(),
-                Keycode::H => "h".to_string(),
-                Keycode::I => "i".to_string(),
-                Keycode::J => "j".to_string(),
-                Keycode::K => "k".to_string(),
-                Keycode::L => "l".to_string(),
-                Keycode::M => "m".to_string(),
-                Keycode::N => "n".to_string(),
-                Keycode::O => "o".to_string(),
-                Keycode::P => "p".to_string(),
-                Keycode::Q => "q".to_string(),
-                Keycode::R => "r".to_string(),
-                Keycode::S => "s".to_string(),
-                Keycode::T => "t".to_string(),
-                Keycode::U => "u".to_string(),
-                Keycode::V => "v".to_string(),
-                Keycode::W => "w".to_string(),
-                Keycode::X => "x".to_string(),
-                Keycode::Y => "y".to_string(),
-                Keycode::Z => "z".to_string(),
+                Keycode::LShift => "Shift".to_string(),
+                Keycode::Num0 => "0".to_string(),
+                Keycode::Num1 => "1".to_string(),
+                Keycode::Num2 => "2".to_string(),
+                Keycode::Num3 => "3".to_string(),
+                Keycode::Num4 => "4".to_string(),
+                Keycode::Num5 => "5".to_string(),
+                Keycode::Num6 => "6".to_string(),
+                Keycode::Num7 => "7".to_string(),
+                Keycode::Num8 => "8".to_string(),
+                Keycode::Num9 => "9".to_string(),
+                Keycode::A => (if shift { "A" } else { "a" }).to_string(),
+                Keycode::B => (if shift { "B" } else { "b" }).to_string(),
+                Keycode::C => (if shift { "C" } else { "c" }).to_string(),
+                Keycode::D => (if shift { "D" } else { "d" }).to_string(),
+                Keycode::E => (if shift { "E" } else { "e" }).to_string(),
+                Keycode::F => (if shift { "F" } else { "f" }).to_string(),
+                Keycode::G => (if shift { "G" } else { "g" }).to_string(),
+                Keycode::H => (if shift { "H" } else { "h" }).to_string(),
+                Keycode::I => (if shift { "I" } else { "i" }).to_string(),
+                Keycode::J => (if shift { "J" } else { "j" }).to_string(),
+                Keycode::K => (if shift { "K" } else { "k" }).to_string(),
+                Keycode::L => (if shift { "L" } else { "l" }).to_string(),
+                Keycode::M => (if shift { "M" } else { "m" }).to_string(),
+                Keycode::N => (if shift { "N" } else { "n" }).to_string(),
+                Keycode::O => (if shift { "O" } else { "o" }).to_string(),
+                Keycode::P => (if shift { "P" } else { "p" }).to_string(),
+                Keycode::Q => (if shift { "Q" } else { "q" }).to_string(),
+                Keycode::R => (if shift { "R" } else { "r" }).to_string(),
+                Keycode::S => (if shift { "S" } else { "s" }).to_string(),
+                Keycode::T => (if shift { "T" } else { "t" }).to_string(),
+                Keycode::U => (if shift { "U" } else { "u" }).to_string(),
+                Keycode::V => (if shift { "V" } else { "v" }).to_string(),
+                Keycode::W => (if shift { "W" } else { "w" }).to_string(),
+                Keycode::X => (if shift { "X" } else { "x" }).to_string(),
+                Keycode::Y => (if shift { "Y" } else { "y" }).to_string(),
+                Keycode::Question => "?".to_string(),
+                Keycode::Slash => "/".to_string(),
+                Keycode::Backslash => "\\".to_string(),
+                Keycode::Period => ".".to_string(),
+                Keycode::Comma => ",".to_string(),
+                Keycode::Greater => ">".to_string(),
+                Keycode::Less => "<".to_string(),
+                Keycode::Colon => ":".to_string(),
+                Keycode::Semicolon => ";".to_string(),
+                Keycode::At => "@".to_string(),
+                Keycode::Exclaim => "!".to_string(),
+                Keycode::Underscore => "_".to_string(),
+                Keycode::Hash => "#".to_string(),
+/* More to consider later (among many more that are available, but we will ignore)
+Tab
+Escape
+Quotedbl
+Dollar
+Percent
+Ampersand
+Quote
+LeftParen
+RightParen
+Asterisk
+Plus
+Minus
+Equals
+LeftBracket
+RightBracket
+Caret
+Backquote
+CapsLock
+F1
+F2
+F3
+F4
+F5
+F6
+F7
+F8
+F9
+F10
+F11
+F12
+LCtrl
+LShift
+LAlt
+LGui
+RCtrl
+RShift
+RAlt
+RGui
+*/
                 keycode => {
                     info!("Unrecognized key code, ignoring event: {:?}", keycode);
                     return None
@@ -317,8 +383,7 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
                 alt: false,
                 ctrl: false,
                 meta: false,
-                shift: keymod.contains(sdl2::keyboard::Mod::LSHIFTMOD) ||
-                    keymod.contains(sdl2::keyboard::Mod::RSHIFTMOD),
+                shift: shift,
             });
             Some(event)
         }

@@ -451,12 +451,13 @@ pub async fn do_event_loop(cfg: &ConnectConfig) -> Result<(), IcgtError> {
         .map_err(|e| e.to_string())?;
     info!("SDL canvas.info().name => \"{}\"", canvas.info().name);
 
-    {
-        let rr: render::Result =
-            server_call(cfg, &ServerCall::WindowSizeChange(window_dim.clone())).await?;
-        redraw(&mut canvas, &window_dim, &rr).await?;
-    }
-
+    let mut next_update = {
+        async {
+            let rr: render::Result =
+                server_call(cfg, &ServerCall::WindowSizeChange(window_dim.clone())).await?;
+            redraw(&mut canvas, &window_dim, &rr).await?;
+        }
+    };
     let mut event_pump = sdl_context.event_pump()?;
 
     event_pump.disable_event(EventType::FingerUp);
@@ -499,7 +500,11 @@ pub async fn do_event_loop(cfg: &ConnectConfig) -> Result<(), IcgtError> {
                     if ke_info.shift {
                         do_update = false;
                         key_infos.push(ke_info.clone());
-                        server_call(cfg, &ServerCall::QueryKeyDown(key_infos.clone())).await?
+                        let qkd = server_call(cfg, &ServerCall::QueryKeyDown(key_infos.clone()));
+                        let ukd = {
+                            next_update :=
+                                server_call(cfg, &ServerCall::UpdateKeyDown(key_infos.clone()));
+                        }
                     } else {
                         if do_update == false {
                             do_update = true;

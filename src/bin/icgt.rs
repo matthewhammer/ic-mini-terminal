@@ -35,7 +35,8 @@ use std::io;
 use std::time::Duration;
 use candid::Nat;
 use num_traits::cast::ToPrimitive;
-use std::thread;
+//use std::thread;
+use tokio::task;
 
 use std::sync::mpsc;
 //use std::sync::mpsc::channel;
@@ -439,6 +440,23 @@ pub async fn redraw<T: RenderTarget>(
     Ok(())
 }
 
+async fn do_update_task(cfg: ConnectConfig,
+                        window_dim: render::Dim,
+                        remote_in: mpsc::Receiver<ServerCall>,
+                        remote_out:mpsc::Sender<render::Result>)
+    -> IcgtResult<()>
+{
+        let rr: render::Result =
+            server_call(&cfg, ServerCall::WindowSizeChange(window_dim)).await?;
+        remote_out.send(rr);
+        loop {
+            let sc = remote_in.recv().unwrap();
+            let rr = server_call(&cfg, sc).await?;
+            remote_out.send(rr);
+        };
+        Ok(())
+}
+
 pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
     use sdl2::event::EventType;
     let mut do_update = true;
@@ -478,22 +496,13 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
     // Interaction cycle as two halves (local/remote); each half is a thread.
     // There are four end points along the cycle's halves:
     let (local_out, remote_in) = mpsc::channel::<ServerCall>();
-    let (remote_out, local_in) = mpsc::channel::<IcgtResult<render::Result> >();
+    let (remote_out, local_in) = mpsc::channel::<render::Result>();
 
     // 1. Remote interactions via update calls to server.
     // (Consumes remote_in and produces remote_out).
-    let update_thread = thread::spawn(move || {
-        async {
-            let rr: render::Result =
-                server_call(cfg, ServerCall::WindowSizeChange(window_dim2.clone())).await?;
-            remote_out.send(Ok(rr));
-            loop {
-                let sc = remote_in.recv().unwrap();
-                let rr = server_call(cfg, sc).await?;
-                remote_out.send(Ok(rr));
-            }
-        }
-    });
+    let update_task = task::spawn(
+        do_update_task(cfg2, window_dim2,
+                       remote_in, remote_out));
 
     // 2. Local interactions via the SDL Event loop.
     // (Consumes local_in and produces local_out).
@@ -518,7 +527,7 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
             event::Event::WindowSizeChange(new_dim) => {
                 debug!("WindowSizeChange {:?}", new_dim);
                 let rr: render::Result =
-                    server_call(cfg.clone(), ServerCall::WindowSizeChange(new_dim.clone())).await?;
+                    server_call(&cfg, ServerCall::WindowSizeChange(new_dim.clone())).await?;
                 window_dim = new_dim;
                 redraw(&mut canvas, &window_dim, &rr).await?;
                 continue 'running;
@@ -537,7 +546,7 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
                 let rr: render::Result = {
                     let mut buffer = u_key_infos.clone();
                     buffer.append(&mut(q_key_infos.clone()));
-                    let rr = server_call(cfg.clone(), ServerCall::QueryKeyDown(buffer.clone())).await?;
+                    let rr = server_call(&cfg, ServerCall::QueryKeyDown(buffer.clone())).await?;
                     rr
                 };
                 redraw(&mut canvas, &window_dim, &rr).await?;
@@ -547,7 +556,7 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
     }
 }
 
-pub async fn server_call(cfg: ConnectConfig, call:ServerCall) ->
+pub async fn server_call(cfg: &ConnectConfig, call:ServerCall) ->
     IcgtResult<render::Result>
 {
     debug!(

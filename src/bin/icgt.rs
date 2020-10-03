@@ -35,6 +35,13 @@ use std::time::Duration;
 use candid::Nat;
 use num_traits::cast::ToPrimitive;
 
+use futures::{
+    future::Future,
+    future::FutureExt, // for `.fuse()`
+    pin_mut,
+    select,
+};
+
 /// Internet Computer Game Terminal (icgt)
 #[derive(StructOpt, Debug, Clone)]
 #[structopt(name = "icgt", raw(setting = "clap::AppSettings::DeriveDisplayOrder"))]
@@ -94,14 +101,15 @@ pub enum ServerCall {
 }
 
 /// Errors from the game terminal, or its subcomponents
+#[derive(Debug, Clone)]
 pub enum IcgtError {
-    Agent(ic_agent::AgentError),
+    Agent(), /* Clone => Agent(ic_agent::AgentError) */
     String(String),
     RingKeyRejected(ring::error::KeyRejected),
     RingUnspecified(ring::error::Unspecified),
 }
 impl std::convert::From<ic_agent::AgentError> for IcgtError {
-    fn from(ae: ic_agent::AgentError) -> Self { IcgtError::Agent(ae) }
+    fn from(ae: ic_agent::AgentError) -> Self { /*IcgtError::Agent(ae)*/ IcgtError::Agent() }
 }
 impl std::convert::From<String> for IcgtError {
     fn from(s: String) -> Self { IcgtError::String(s) }
@@ -130,7 +138,11 @@ const RETRY_PAUSE: Duration = Duration::from_millis(100);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 
-pub fn agent(url: &str) -> Result<Agent, IcgtError> {
+pub type IcgtResult<X> = Result<X, IcgtError>;
+pub type BoxFuture<X> = Box<dyn Future<Output = X>>;
+pub type PinBoxFuture<X> = core::pin::Pin<BoxFuture<X>>;
+
+pub fn agent(url: &str) -> IcgtResult<Agent> {
     //use ring::signature::Ed25519KeyPair;
     use ic_agent::agent::AgentConfig;
     use ring::rand::SystemRandom;
@@ -270,7 +282,7 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
             keymod,
             ..
         } => {
-            let shift = 
+            let shift =
                 keymod.contains(sdl2::keyboard::Mod::LSHIFTMOD) ||
                 keymod.contains(sdl2::keyboard::Mod::RSHIFTMOD)
                 ;
@@ -421,10 +433,11 @@ pub async fn redraw<T: RenderTarget>(
     Ok(())
 }
 
-pub async fn do_event_loop(cfg: &ConnectConfig) -> Result<(), IcgtError> {
+pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
     use sdl2::event::EventType;
     let mut do_update = true;
-    let mut key_infos = vec![];
+    let mut q_key_infos = vec![];
+    let mut u_key_infos = vec![];
     let mut window_dim = render::Dim {
         width: Nat::from(1000),
         height: Nat::from(666),
@@ -451,13 +464,14 @@ pub async fn do_event_loop(cfg: &ConnectConfig) -> Result<(), IcgtError> {
         .map_err(|e| e.to_string())?;
     info!("SDL canvas.info().name => \"{}\"", canvas.info().name);
 
-    let mut next_update = {
-        async {
+    let cfg2 = cfg.clone();
+    let window_dim2 = window_dim.clone();
+    let mut next_update : PinBoxFuture<_> =
+        (async {
             let rr: render::Result =
-                server_call(cfg, &ServerCall::WindowSizeChange(window_dim.clone())).await?;
-            redraw(&mut canvas, &window_dim, &rr).await?;
-        }
-    };
+                server_call(cfg2, ServerCall::WindowSizeChange(window_dim2)).await?;
+            Ok(rr)
+        }).boxed_local();
     let mut event_pump = sdl_context.event_pump()?;
 
     event_pump.disable_event(EventType::FingerUp);
@@ -478,7 +492,7 @@ pub async fn do_event_loop(cfg: &ConnectConfig) -> Result<(), IcgtError> {
             event::Event::WindowSizeChange(new_dim) => {
                 debug!("WindowSizeChange {:?}", new_dim);
                 let rr: render::Result =
-                    server_call(cfg, &ServerCall::WindowSizeChange(new_dim.clone())).await?;
+                    server_call(cfg.clone(), ServerCall::WindowSizeChange(new_dim.clone())).await?;
                 window_dim = new_dim;
                 redraw(&mut canvas, &window_dim, &rr).await?;
                 continue 'running;
@@ -492,37 +506,42 @@ pub async fn do_event_loop(cfg: &ConnectConfig) -> Result<(), IcgtError> {
             },
             event::Event::KeyDown(ref ke_info) => {
                 debug!("KeyDown {:?}", ke_info.key);
-                if ke_info.key == "LShift" || ke_info.key == "RShift" {
-                    debug!("ignoring bare shift {:?}", ke_info.key);
-                    continue 'running
+                q_key_infos.push(ke_info.clone());
+
+                let rr: render::Result = {
+                    // buffer := vals(u_key_infos) `append` vals(q_key_infos);
+                    let mut buffer = u_key_infos.clone();
+                    buffer.append(&mut(q_key_infos.clone()));
+
+                    // Query task is new, and contains the updated key buffer
+                    let q_task = server_call(cfg.clone(), ServerCall::QueryKeyDown(buffer.clone())).fuse();
+
+                    // Query and update tasks run concurrently (continuing the update task created earlier):
+                    pin_mut!(q_task);
+                    select! {
+                        (rr) = q_task => {
+                            info!("Select next server response => query response");
+                            rr.unwrap()
+                        },
+                        (rr) = next_update => {
+                            // If the update finishes:
+                            //   Next update (buffer) uses the current content of query buffer.
+                            info!("Select next server response => update response");
+                            u_key_infos = q_key_infos;
+                            q_key_infos = vec![];
+                            next_update =
+                                server_call(cfg.clone(), ServerCall::UpdateKeyDown(u_key_infos.clone())).boxed_local();
+                            rr.unwrap()
+                        },
+                    }
                 };
-                let rr: render::Result =
-                    if ke_info.shift {
-                        do_update = false;
-                        key_infos.push(ke_info.clone());
-                        let qkd = server_call(cfg, &ServerCall::QueryKeyDown(key_infos.clone()));
-                        let ukd = {
-                            next_update :=
-                                server_call(cfg, &ServerCall::UpdateKeyDown(key_infos.clone()));
-                        }
-                    } else {
-                        if do_update == false {
-                            do_update = true;
-                            key_infos.push(ke_info.clone());
-                            let rr = server_call(cfg, &ServerCall::UpdateKeyDown(key_infos.clone())).await?;
-                            key_infos = vec![];
-                            rr
-                        } else {
-                            server_call(cfg, &ServerCall::UpdateKeyDown(vec![ke_info.clone()])).await?
-                        }
-                    };
                 redraw(&mut canvas, &window_dim, &rr).await?;
             },
         };
     }
 }
 
-pub async fn server_call(cfg: &ConnectConfig, call:&ServerCall) ->
+pub async fn server_call(cfg: ConnectConfig, call:ServerCall) ->
     Result<render::Result, IcgtError>
 {
     debug!(
@@ -538,16 +557,16 @@ pub async fn server_call(cfg: &ConnectConfig, call:&ServerCall) ->
         .build();
     let timestamp = std::time::SystemTime::now();
     info!("server_call: {:?}", call);
-    let arg_bytes = match call {
+    let arg_bytes = match call.clone() {
         ServerCall::Tick => { Encode!(&()).unwrap() }
-        ServerCall::WindowSizeChange(window_dim) => { Encode!(window_dim).unwrap() }
-        ServerCall::QueryKeyDown(keys) => { Encode!(keys).unwrap() }
-        ServerCall::UpdateKeyDown(keys) => { Encode!(keys).unwrap() }
+        ServerCall::WindowSizeChange(window_dim) => { Encode!(&window_dim).unwrap() }
+        ServerCall::QueryKeyDown(keys) => { Encode!(&keys).unwrap() }
+        ServerCall::UpdateKeyDown(keys) => { Encode!(&keys).unwrap() }
     };
     info!("server_call: Encoded argument via Candid; Arg size {:?} bytes", arg_bytes.len());
     info!("server_call: Awaiting response from server...");
     // do an update or query call, based on the ServerCall case:
-    let blob_res = match call {
+    let blob_res = match call.clone() {
         ServerCall::Tick => {
             /*
             runtime.block_on(agent.update(
@@ -593,13 +612,13 @@ pub async fn server_call(cfg: &ConnectConfig, call:&ServerCall) ->
               blob_res.len(), elapsed);
         match Decode!(&(*blob_res), render::Result) {
             Ok(res) => {
-                if true {
+                if cfg.cli_opt.log_trace {
                     let mut res_log = format!("{:?}", &res);
                     if res_log.len() > 1000 {
                         res_log.truncate(1000);
                         res_log.push_str("...(truncated)");
                     }
-                    info!("server_call: Successful decoding of graphics output: {:?}", res_log);
+                    trace!("server_call: Successful decoding of graphics output: {:?}", res_log);
                 }
                 Ok(res)
             },
@@ -643,7 +662,7 @@ fn main() {
                 cli_opt,
             };
             info!("Connecting to IC canister: {:?}", cfg);
-            runtime.block_on(do_event_loop(&cfg)).ok();
+            runtime.block_on(do_event_loop(cfg)).ok();
         }
     }
 }

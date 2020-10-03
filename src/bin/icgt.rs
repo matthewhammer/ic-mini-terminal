@@ -30,16 +30,23 @@ use delay::Delay;
 use sdl2::event::Event as SysEvent; // not to be confused with our own definition
 use sdl2::event::WindowEvent;
 use sdl2::keyboard::Keycode;
+use std::cell::RefCell;
 use std::io;
 use std::time::Duration;
 use candid::Nat;
 use num_traits::cast::ToPrimitive;
+use std::thread;
+
+use std::sync::mpsc;
+//use std::sync::mpsc::channel;
 
 use futures::{
-    future::Future,
+    // future::Future,
+    future::FusedFuture,
     future::FutureExt, // for `.fuse()`
-    pin_mut,
-    select,
+    //pin_mut,
+    //select,
+    Sink, Stream
 };
 
 /// Internet Computer Game Terminal (icgt)
@@ -139,8 +146,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 
 pub type IcgtResult<X> = Result<X, IcgtError>;
-pub type BoxFuture<X> = Box<dyn Future<Output = X>>;
-pub type PinBoxFuture<X> = core::pin::Pin<BoxFuture<X>>;
+pub type NextUpdate<X> = RefCell<dyn FusedFuture<Output = X>>;
 
 pub fn agent(url: &str) -> IcgtResult<Agent> {
     //use ring::signature::Ed25519KeyPair;
@@ -464,21 +470,34 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
         .map_err(|e| e.to_string())?;
     info!("SDL canvas.info().name => \"{}\"", canvas.info().name);
 
+
     let cfg2 = cfg.clone();
     let window_dim2 = window_dim.clone();
-    let mut next_update : PinBoxFuture<_> =
-        (async {
-            let rr: render::Result =
-                server_call(cfg2, ServerCall::WindowSizeChange(window_dim2)).await?;
-            Ok(rr)
-        }).boxed_local();
-    let mut event_pump = sdl_context.event_pump()?;
 
-    event_pump.disable_event(EventType::FingerUp);
-    event_pump.disable_event(EventType::FingerDown);
-    event_pump.disable_event(EventType::FingerMotion);
-    event_pump.disable_event(EventType::MouseMotion);
+    // ---------------------------------------------------------------------
+    // Interaction cycle as two halves (local/remote); each half is a thread.
+    // There are four end points along the cycle's halves:
+    let (local_out, remote_in) = mpsc::channel::<ServerCall>();
+    let (remote_out, local_in) = mpsc::channel::<IcgtResult<render::Result> >();
 
+    // 1. Remote interactions via update calls to server.
+    // (Consumes remote_in and produces remote_out).
+    let update_thread = thread::spawn(move || {
+        loop {
+            
+        }
+    });
+
+    // 2. Local interactions via the SDL Event loop.
+    // (Consumes local_in and produces local_out).
+    let mut event_pump = {
+        let mut p = sdl_context.event_pump()?;
+        p.disable_event(EventType::FingerUp);
+        p.disable_event(EventType::FingerDown);
+        p.disable_event(EventType::FingerMotion);
+        p.disable_event(EventType::MouseMotion);
+        p
+    };
     'running: loop {
         let system_event = event_pump.wait_event();
         let event = translate_system_event(&system_event);
@@ -509,40 +528,20 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
                 q_key_infos.push(ke_info.clone());
 
                 let rr: render::Result = {
-                    // buffer := vals(u_key_infos) `append` vals(q_key_infos);
                     let mut buffer = u_key_infos.clone();
                     buffer.append(&mut(q_key_infos.clone()));
-
-                    // Query task is new, and contains the updated key buffer
-                    let q_task = server_call(cfg.clone(), ServerCall::QueryKeyDown(buffer.clone())).fuse();
-
-                    // Query and update tasks run concurrently (continuing the update task created earlier):
-                    pin_mut!(q_task);
-                    select! {
-                        (rr) = q_task => {
-                            info!("Select next server response => query response");
-                            rr.unwrap()
-                        },
-                        (rr) = next_update => {
-                            // If the update finishes:
-                            //   Next update (buffer) uses the current content of query buffer.
-                            info!("Select next server response => update response");
-                            u_key_infos = q_key_infos;
-                            q_key_infos = vec![];
-                            next_update =
-                                server_call(cfg.clone(), ServerCall::UpdateKeyDown(u_key_infos.clone())).boxed_local();
-                            rr.unwrap()
-                        },
-                    }
+                    let rr = server_call(cfg.clone(), ServerCall::QueryKeyDown(buffer.clone())).await?;
+                    rr
                 };
                 redraw(&mut canvas, &window_dim, &rr).await?;
-            },
+                continue 'running;                                
+            }
         };
     }
 }
 
 pub async fn server_call(cfg: ConnectConfig, call:ServerCall) ->
-    Result<render::Result, IcgtError>
+    IcgtResult<render::Result>
 {
     debug!(
         "server_call: to canister_id {:?} at replica_url {:?}",

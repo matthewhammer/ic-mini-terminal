@@ -483,8 +483,15 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
     // 1. Remote interactions via update calls to server.
     // (Consumes remote_in and produces remote_out).
     let update_thread = thread::spawn(move || {
-        loop {
-            
+        async {
+            let rr: render::Result =
+                server_call(cfg, ServerCall::WindowSizeChange(window_dim2.clone())).await?;
+            remote_out.send(Ok(rr));
+            loop {
+                let sc = remote_in.recv().unwrap();
+                let rr = server_call(cfg, sc).await?;
+                remote_out.send(Ok(rr));
+            }
         }
     });
 
@@ -534,7 +541,7 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
                     rr
                 };
                 redraw(&mut canvas, &window_dim, &rr).await?;
-                continue 'running;                                
+                continue 'running;
             }
         };
     }

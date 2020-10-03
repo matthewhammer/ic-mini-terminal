@@ -50,6 +50,13 @@ The test canisters installed in the steps just above each
 expose this "graphics server" interface.
 
 
+### Text editor demo
+
+Try this script:
+```
+./textEdit.sh
+```
+
 ### Interact with graphics server
 
 The graphics server is a canister running on the replica.

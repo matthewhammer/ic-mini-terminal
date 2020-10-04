@@ -550,7 +550,7 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
                 u_key_infos = q_key_infos;
                 q_key_infos = vec![];
             }
-            Err(Empty) => { /* not ready; do nothing */ }
+            Err(mpsc::TryRecvError::Empty) => { /* not ready; do nothing */ }
             Err(e) => error!("{:?}", e),
         };
         continue 'running;

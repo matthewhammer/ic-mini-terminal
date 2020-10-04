@@ -299,16 +299,16 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
                 Keycode::Down => "ArrowDown".to_string(),
                 Keycode::Backspace => "Backspace".to_string(),
                 Keycode::LShift => "Shift".to_string(),
-                Keycode::Num0 => "0".to_string(),
-                Keycode::Num1 => "1".to_string(),
-                Keycode::Num2 => "2".to_string(),
-                Keycode::Num3 => "3".to_string(),
-                Keycode::Num4 => "4".to_string(),
-                Keycode::Num5 => "5".to_string(),
-                Keycode::Num6 => "6".to_string(),
-                Keycode::Num7 => "7".to_string(),
-                Keycode::Num8 => "8".to_string(),
-                Keycode::Num9 => "9".to_string(),
+                Keycode::Num0 => (if shift { ")" } else { "0" }).to_string(),
+                Keycode::Num1 => (if shift { "!" } else { "1" }).to_string(),
+                Keycode::Num2 => (if shift { "@" } else { "2" }).to_string(),
+                Keycode::Num3 => (if shift { "#" } else { "3" }).to_string(),
+                Keycode::Num4 => (if shift { "$" } else { "4" }).to_string(),
+                Keycode::Num5 => (if shift { "%" } else { "5" }).to_string(),
+                Keycode::Num6 => (if shift { "^" } else { "6" }).to_string(),
+                Keycode::Num7 => (if shift { "&" } else { "7" }).to_string(),
+                Keycode::Num8 => (if shift { "*" } else { "8" }).to_string(),
+                Keycode::Num9 => (if shift { "(" } else { "9" }).to_string(),
                 Keycode::A => (if shift { "A" } else { "a" }).to_string(),
                 Keycode::B => (if shift { "B" } else { "b" }).to_string(),
                 Keycode::C => (if shift { "C" } else { "c" }).to_string(),
@@ -334,35 +334,38 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
                 Keycode::W => (if shift { "W" } else { "w" }).to_string(),
                 Keycode::X => (if shift { "X" } else { "x" }).to_string(),
                 Keycode::Y => (if shift { "Y" } else { "y" }).to_string(),
+                Keycode::Equals => (if shift { "+" } else { "=" }).to_string(),
+                Keycode::Plus => "+".to_string(),
+                Keycode::Slash => (if shift { "?" } else { "/" }).to_string(),
                 Keycode::Question => "?".to_string(),
-                Keycode::Slash => "/".to_string(),
-                Keycode::Backslash => "\\".to_string(),
-                Keycode::Period => ".".to_string(),
-                Keycode::Comma => ",".to_string(),
+                Keycode::Period => (if shift { ">" } else { "." }).to_string(),
                 Keycode::Greater => ">".to_string(),
+                Keycode::Comma => (if shift { "<" } else { "," }).to_string(),
                 Keycode::Less => "<".to_string(),
+                Keycode::Backslash => (if shift { "|" } else { "\\" }).to_string(),
                 Keycode::Colon => ":".to_string(),
-                Keycode::Semicolon => ";".to_string(),
+                Keycode::Semicolon => (if shift { ":" } else { ";" }).to_string(),
                 Keycode::At => "@".to_string(),
-                Keycode::Exclaim => "!".to_string(),
+                Keycode::Minus => (if shift { "_" } else { "-" }).to_string(),
                 Keycode::Underscore => "_".to_string(),
+                Keycode::Exclaim => "!".to_string(),
                 Keycode::Hash => "#".to_string(),
+                Keycode::Quote => (if shift { "\"" } else { "'" }).to_string(),
+                Keycode::Quotedbl => "\"".to_string(),
+                Keycode::LeftBracket => (if shift { "{" } else { "[" }).to_string(),
+                Keycode::RightBracket => (if shift { "}" } else { "]" }).to_string(),
+
                 /* More to consider later (among many more that are available, but we will ignore)
-                Tab
                 Escape
-                Quotedbl
                 Dollar
                 Percent
                 Ampersand
-                Quote
                 LeftParen
                 RightParen
                 Asterisk
                 Plus
                 Minus
                 Equals
-                LeftBracket
-                RightBracket
                 Caret
                 Backquote
                 CapsLock
@@ -507,39 +510,41 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
         p
     };
     'running: loop {
-        let system_event = event_pump.wait_event();
-        let event = translate_system_event(&system_event);
-        let event = match event {
-            None => continue 'running,
-            Some(event) => event,
+        if let Some(system_event) = event_pump.wait_event_timeout(13) {
+            let event = translate_system_event(&system_event);
+            let event = match event {
+                None => continue 'running,
+                Some(event) => event,
+            };
+            trace!("SDL event_pump.wait_event() => {:?}", &system_event);
+            // catch window resize event: redraw and loop:
+            match event {
+                event::Event::Quit => {
+                    debug!("Quit");
+                    return Ok(());
+                }
+                event::Event::WindowSizeChange(new_dim) => {
+                    debug!("WindowSizeChange {:?}", new_dim);
+                    let rr: render::Result =
+                        server_call(&cfg, ServerCall::WindowSizeChange(new_dim.clone())).await?;
+                    window_dim = new_dim;
+                    redraw(&mut canvas, &window_dim, &rr).await?;
+                }
+                event::Event::KeyUp(ref ke_info) => debug!("KeyUp {:?}", ke_info.key),
+                event::Event::KeyDown(ref ke_info) => {
+                    debug!("KeyDown {:?}", ke_info.key);
+                    q_key_infos.push(ke_info.clone());
+                    let rr: render::Result = {
+                        let mut buffer = u_key_infos.clone();
+                        buffer.append(&mut (q_key_infos.clone()));
+                        let rr =
+                            server_call(&cfg, ServerCall::QueryKeyDown(buffer.clone())).await?;
+                        rr
+                    };
+                    redraw(&mut canvas, &window_dim, &rr).await?;
+                }
+            }
         };
-        trace!("SDL event_pump.wait_event() => {:?}", &system_event);
-        // catch window resize event: redraw and loop:
-        match event {
-            event::Event::Quit => {
-                debug!("Quit");
-                return Ok(());
-            }
-            event::Event::WindowSizeChange(new_dim) => {
-                debug!("WindowSizeChange {:?}", new_dim);
-                let rr: render::Result =
-                    server_call(&cfg, ServerCall::WindowSizeChange(new_dim.clone())).await?;
-                window_dim = new_dim;
-                redraw(&mut canvas, &window_dim, &rr).await?;
-            }
-            event::Event::KeyUp(ref ke_info) => debug!("KeyUp {:?}", ke_info.key),
-            event::Event::KeyDown(ref ke_info) => {
-                debug!("KeyDown {:?}", ke_info.key);
-                q_key_infos.push(ke_info.clone());
-                let rr: render::Result = {
-                    let mut buffer = u_key_infos.clone();
-                    buffer.append(&mut (q_key_infos.clone()));
-                    let rr = server_call(&cfg, ServerCall::QueryKeyDown(buffer.clone())).await?;
-                    rr
-                };
-                redraw(&mut canvas, &window_dim, &rr).await?;
-            }
-        }
         // Is update task is ready for input?
         // (Signaled by local_in being ready to read.)
         match local_in.try_recv() {

@@ -30,24 +30,10 @@ use num_traits::cast::ToPrimitive;
 use sdl2::event::Event as SysEvent; // not to be confused with our own definition
 use sdl2::event::WindowEvent;
 use sdl2::keyboard::Keycode;
-use std::cell::RefCell;
 use std::io;
-use std::time::Duration;
-//use std::thread;
-use tokio::task;
-
 use std::sync::mpsc;
-//use std::sync::mpsc::channel;
-
-use futures::{
-    // future::Future,
-    future::FusedFuture,
-    future::FutureExt, // for `.fuse()`
-    //pin_mut,
-    //select,
-    Sink,
-    Stream,
-};
+use std::time::Duration;
+use tokio::task;
 
 /// Internet Computer Game Terminal (icgt)
 #[derive(StructOpt, Debug, Clone)]
@@ -116,7 +102,7 @@ pub enum IcgtError {
     RingUnspecified(ring::error::Unspecified),
 }
 impl std::convert::From<ic_agent::AgentError> for IcgtError {
-    fn from(ae: ic_agent::AgentError) -> Self {
+    fn from(_ae: ic_agent::AgentError) -> Self {
         /*IcgtError::Agent(ae)*/
         IcgtError::Agent()
     }
@@ -156,7 +142,6 @@ const RETRY_PAUSE: Duration = Duration::from_millis(100);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub type IcgtResult<X> = Result<X, IcgtError>;
-pub type NextUpdate<X> = RefCell<dyn FusedFuture<Output = X>>;
 
 pub fn agent(url: &str) -> IcgtResult<Agent> {
     //use ring::signature::Ed25519KeyPair;
@@ -458,18 +443,16 @@ async fn do_update_task(
     remote_out: mpsc::Sender<render::Result>,
 ) -> IcgtResult<()> {
     let rr: render::Result = server_call(&cfg, ServerCall::WindowSizeChange(window_dim)).await?;
-    remote_out.send(rr);
+    remote_out.send(rr).unwrap();
     loop {
         let sc = remote_in.recv().unwrap();
         let rr = server_call(&cfg, sc).await?;
-        remote_out.send(rr);
+        remote_out.send(rr).unwrap();
     }
-    Ok(())
 }
 
 pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
     use sdl2::event::EventType;
-    let mut do_update = true;
     let mut q_key_infos = vec![];
     let mut u_key_infos = vec![];
     let mut window_dim = render::Dim {
@@ -511,7 +494,7 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
 
     // 1. Remote interactions via update calls to server.
     // (Consumes remote_in and produces remote_out).
-    let update_task = task::spawn(do_update_task(cfg2, window_dim2, remote_in, remote_out));
+    task::spawn(do_update_task(cfg2, window_dim2, remote_in, remote_out));
 
     // 2. Local interactions via the SDL Event loop.
     // (Consumes local_in and produces local_out).
@@ -524,13 +507,6 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
         p
     };
     'running: loop {
-        // todo -- Is there a remote event ready? (non-blocking read on local_in to check this)
-        // If so, adjust the buffers:
-        // 1. Send query-only buffer on local_out as new update buffer.
-        // 2. New update buffer is only-query buffer.
-        // 3. Flush query-only buffer.
-        // todo -- add timer-based event, to prevent waiting too long for SDL input events before re-checking.
-
         let system_event = event_pump.wait_event();
         let event = translate_system_event(&system_event);
         let event = match event {
@@ -540,17 +516,16 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
         trace!("SDL event_pump.wait_event() => {:?}", &system_event);
         // catch window resize event: redraw and loop:
         match event {
+            event::Event::Quit => {
+                debug!("Quit");
+                return Ok(());
+            }
             event::Event::WindowSizeChange(new_dim) => {
                 debug!("WindowSizeChange {:?}", new_dim);
                 let rr: render::Result =
                     server_call(&cfg, ServerCall::WindowSizeChange(new_dim.clone())).await?;
                 window_dim = new_dim;
                 redraw(&mut canvas, &window_dim, &rr).await?;
-                continue 'running;
-            }
-            event::Event::Quit => {
-                debug!("Quit");
-                return Ok(());
             }
             event::Event::KeyUp(ref ke_info) => debug!("KeyUp {:?}", ke_info.key),
             event::Event::KeyDown(ref ke_info) => {
@@ -563,9 +538,22 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
                     rr
                 };
                 redraw(&mut canvas, &window_dim, &rr).await?;
-                continue 'running;
             }
+        }
+        // Is update task is ready for input?
+        // (Signaled by local_in being ready to read.)
+        match local_in.try_recv() {
+            Ok(_rr) => {
+                local_out
+                    .send(ServerCall::UpdateKeyDown(q_key_infos.clone()))
+                    .unwrap();
+                u_key_infos = q_key_infos;
+                q_key_infos = vec![];
+            }
+            Err(Empty) => { /* not ready; do nothing */ }
+            Err(e) => error!("{:?}", e),
         };
+        continue 'running;
     }
 }
 

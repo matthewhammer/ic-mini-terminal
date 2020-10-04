@@ -350,22 +350,22 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
                 Keycode::Underscore => "_".to_string(),
                 Keycode::Exclaim => "!".to_string(),
                 Keycode::Hash => "#".to_string(),
+                Keycode::Quote => (if shift { "\"" } else { "'" }).to_string(),
+                Keycode::Quotedbl => "\"".to_string(),
+                Keycode::LeftBracket => (if shift { "{" } else { "[" }).to_string(),
+                Keycode::RightBracket => (if shift { "}" } else { "]" }).to_string(),
+
                 /* More to consider later (among many more that are available, but we will ignore)
-                Tab
                 Escape
-                Quotedbl
                 Dollar
                 Percent
                 Ampersand
-                Quote
                 LeftParen
                 RightParen
                 Asterisk
                 Plus
                 Minus
                 Equals
-                LeftBracket
-                RightBracket
                 Caret
                 Backquote
                 CapsLock
@@ -510,39 +510,41 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
         p
     };
     'running: loop {
-        let system_event = event_pump.wait_event();
-        let event = translate_system_event(&system_event);
-        let event = match event {
-            None => continue 'running,
-            Some(event) => event,
+        if let Some(system_event) = event_pump.wait_event_timeout(13) {
+            let event = translate_system_event(&system_event);
+            let event = match event {
+                None => continue 'running,
+                Some(event) => event,
+            };
+            trace!("SDL event_pump.wait_event() => {:?}", &system_event);
+            // catch window resize event: redraw and loop:
+            match event {
+                event::Event::Quit => {
+                    debug!("Quit");
+                    return Ok(());
+                }
+                event::Event::WindowSizeChange(new_dim) => {
+                    debug!("WindowSizeChange {:?}", new_dim);
+                    let rr: render::Result =
+                        server_call(&cfg, ServerCall::WindowSizeChange(new_dim.clone())).await?;
+                    window_dim = new_dim;
+                    redraw(&mut canvas, &window_dim, &rr).await?;
+                }
+                event::Event::KeyUp(ref ke_info) => debug!("KeyUp {:?}", ke_info.key),
+                event::Event::KeyDown(ref ke_info) => {
+                    debug!("KeyDown {:?}", ke_info.key);
+                    q_key_infos.push(ke_info.clone());
+                    let rr: render::Result = {
+                        let mut buffer = u_key_infos.clone();
+                        buffer.append(&mut (q_key_infos.clone()));
+                        let rr =
+                            server_call(&cfg, ServerCall::QueryKeyDown(buffer.clone())).await?;
+                        rr
+                    };
+                    redraw(&mut canvas, &window_dim, &rr).await?;
+                }
+            }
         };
-        trace!("SDL event_pump.wait_event() => {:?}", &system_event);
-        // catch window resize event: redraw and loop:
-        match event {
-            event::Event::Quit => {
-                debug!("Quit");
-                return Ok(());
-            }
-            event::Event::WindowSizeChange(new_dim) => {
-                debug!("WindowSizeChange {:?}", new_dim);
-                let rr: render::Result =
-                    server_call(&cfg, ServerCall::WindowSizeChange(new_dim.clone())).await?;
-                window_dim = new_dim;
-                redraw(&mut canvas, &window_dim, &rr).await?;
-            }
-            event::Event::KeyUp(ref ke_info) => debug!("KeyUp {:?}", ke_info.key),
-            event::Event::KeyDown(ref ke_info) => {
-                debug!("KeyDown {:?}", ke_info.key);
-                q_key_infos.push(ke_info.clone());
-                let rr: render::Result = {
-                    let mut buffer = u_key_infos.clone();
-                    buffer.append(&mut (q_key_infos.clone()));
-                    let rr = server_call(&cfg, ServerCall::QueryKeyDown(buffer.clone())).await?;
-                    rr
-                };
-                redraw(&mut canvas, &window_dim, &rr).await?;
-            }
-        }
         // Is update task is ready for input?
         // (Signaled by local_in being ready to read.)
         match local_in.try_recv() {

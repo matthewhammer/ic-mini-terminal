@@ -99,9 +99,11 @@ module {
     // Title line:
     let queryViewMsg = if isQueryView " (q)" else "";
 
-    r.begin(#flow(horz));
-    tr.textAtts("Hello world" # queryViewMsg, taTitleText());
-    r.end();
+    {
+      r.begin(#flow(horz));
+      tr.textAtts("Hello world" # queryViewMsg, taTitleText());
+      r.end();
+    };
     func isNewline(c : Text) : Bool = {
       c == "\n"
     };
@@ -110,19 +112,15 @@ module {
       TextSeq.flatten(Seq.tokens(st.fwd, isNewline, st.levels)),
     );
     r.begin(#flow(vert));
-    r.begin(#flow(horz));
-    var first = true;
-    for (tok in Seq.iter(linesBefore, #fwd)) {
-      if first {
-        first := false
-      } else {
+    {
+      r.begin(#flow(horz));
+      for (tok in Seq.iter(linesBefore, #fwd)) {
         r.end();
         r.begin(#flow(horz));
+        tr.textAtts(tok, userTextAtts());
       };
-      tr.textAtts(tok, userTextAtts());
-    };
-    // edge case: newline char is immediately to left of cursor (begin next line)
-    switch (Seq.peekBack(st.bwd)) {
+      // edge case: newline char is immediately to left of cursor (begin next line)
+      switch (Seq.peekBack(st.bwd)) {
       case (?lastChar) {
              if (isNewline(lastChar)) {
                r.end();
@@ -130,20 +128,16 @@ module {
              };
            };
       case _ { };
-    };
-    tr.textAtts("*", cursorAtts());
-    first := true;
-    for (tok in Seq.iter(linesAfter, #fwd)) {
-      if first {
-        first := false
-      } else {
+      };
+      tr.textAtts("*", cursorAtts());
+      for (tok in Seq.iter(linesAfter, #fwd)) {
+        tr.textAtts(tok, userTextAtts());
         r.end();
         r.begin(#flow(horz));
       };
-      tr.textAtts(tok, userTextAtts());
+      r.end();
     };
-    r.end();
-    r.end();
+    r.end(); // Vertical end
     r.end(); // Display end
     r.getElm()
   };

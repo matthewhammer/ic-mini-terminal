@@ -33,9 +33,15 @@ module {
       case ">" insert(st, #text(">"));
       case "(" insert(st, #text("("));
       case ")" insert(st, #text(")"));
+      case "[" insert(st, #text("["));
+      case "]" insert(st, #text("]"));
+      case "{" insert(st, #text("{"));
+      case "}" insert(st, #text("}"));
       case ":" insert(st, #text(":"));
       case ";" insert(st, #text(";"));
       case "`" insert(st, #text("`"));
+      case "'" insert(st, #text("'"));
+      case "\"" insert(st, #text("\""));
       case "~" insert(st, #text("~"));
       case "!" insert(st, #text("!"));
       case "@" insert(st, #text("@"));

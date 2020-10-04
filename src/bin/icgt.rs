@@ -524,9 +524,12 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
         p
     };
     'running: loop {
-        // todo -- Is there a remote event ready? (non-blocking read to check)
+        // todo -- Is there a remote event ready? (non-blocking read on local_in to check this)
         // If so, adjust the buffers:
-        // Move keyboard events from query-only to update+query buffer; flush query-only buffer.
+        // 1. Send query-only buffer on local_out as new update buffer.
+        // 2. New update buffer is only-query buffer.
+        // 3. Flush query-only buffer.
+        // todo -- add timer-based event, to prevent waiting too long for SDL input events before re-checking.
 
         let system_event = event_pump.wait_event();
         let event = translate_system_event(&system_event);

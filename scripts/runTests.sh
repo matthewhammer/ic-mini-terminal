@@ -1,6 +1,6 @@
 #!/bin/bash
 echo dfx start &&\
-dfx -vv start --background &&\
+dfx start --background &&\
 \
 echo canister create &&\
 dfx canister create textEdit &&\

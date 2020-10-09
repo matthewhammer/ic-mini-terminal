@@ -39,6 +39,10 @@ use tokio::task;
 #[derive(StructOpt, Debug, Clone)]
 #[structopt(name = "icgt", raw(setting = "clap::AppSettings::DeriveDisplayOrder"))]
 pub struct CliOpt {
+    /// No window for graphics output.
+    /// Filesystem-based graphics output only.
+    #[structopt(short = "W", long = "no-window")]
+    no_window: bool,
     /// Enable tracing -- the most verbose log.
     #[structopt(short = "t", long = "trace-log")]
     log_trace: bool,
@@ -459,40 +463,19 @@ async fn do_update_task(
     }
 }
 
-pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
-    use sdl2::event::EventType;
-    let mut q_key_infos = vec![];
-    let mut u_key_infos = vec![];
-    let mut window_dim = render::Dim {
-        width: Nat::from(1000),
-        height: Nat::from(666),
-    };
-    let sdl_context = sdl2::init()?;
-    let video_subsystem = sdl_context.video()?;
-    let window = video_subsystem
-        .window(
-            "ic-game-terminal",
-            nat_ceil(&window_dim.width),
-            nat_ceil(&window_dim.height),
-        )
-        .position_centered()
-        .resizable()
-        //.input_grabbed()
-        //.fullscreen()
-        //.fullscreen_desktop()
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let mut canvas = window
-        .into_canvas()
-        .target_texture()
-        .present_vsync()
-        .build()
-        .map_err(|e| e.to_string())?;
+async fn event_loop<T: RenderTarget>(
+    cfg: ConnectConfig,
+    window_dim_: render::Dim,
+    sdl: sdl2::Sdl,
+    canvas: &mut Canvas<T>,
+) -> Result<(), IcgtError> {
     info!("SDL canvas.info().name => \"{}\"", canvas.info().name);
 
     let cfg2 = cfg.clone();
-    let window_dim2 = window_dim.clone();
+    let mut window_dim = window_dim_.clone();
+
+    let mut q_key_infos = vec![];
+    let mut u_key_infos = vec![];
 
     // ---------------------------------------------------------------------
     // Interaction cycle as two halves (local/remote); each half is a thread.
@@ -502,12 +485,13 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
 
     // 1. Remote interactions via update calls to server.
     // (Consumes remote_in and produces remote_out).
-    task::spawn(do_update_task(cfg2, window_dim2, remote_in, remote_out));
+    task::spawn(do_update_task(cfg2, window_dim_, remote_in, remote_out));
 
     // 2. Local interactions via the SDL Event loop.
     // (Consumes local_in and produces local_out).
     let mut event_pump = {
-        let mut p = sdl_context.event_pump()?;
+        use sdl2::event::EventType;
+        let mut p = sdl.event_pump()?;
         p.disable_event(EventType::FingerUp);
         p.disable_event(EventType::FingerDown);
         p.disable_event(EventType::FingerMotion);
@@ -533,7 +517,7 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
                     let rr: render::Result =
                         server_call(&cfg, ServerCall::WindowSizeChange(new_dim.clone())).await?;
                     window_dim = new_dim;
-                    redraw(&mut canvas, &window_dim, &rr).await?;
+                    redraw(canvas, &window_dim, &rr).await?;
                 }
                 event::Event::KeyUp(ref ke_info) => debug!("KeyUp {:?}", ke_info.key),
                 event::Event::KeyDown(ref ke_info) => {
@@ -546,7 +530,7 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
                             server_call(&cfg, ServerCall::QueryKeyDown(buffer.clone())).await?;
                         rr
                     };
-                    redraw(&mut canvas, &window_dim, &rr).await?;
+                    redraw(canvas, &window_dim, &rr).await?;
                 }
             }
         };
@@ -565,6 +549,49 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
         };
         continue 'running;
     }
+}
+
+async fn start_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
+    let window_dim = render::Dim {
+        width: Nat::from(1000),
+        height: Nat::from(666),
+    };
+    let sdl = sdl2::init()?;
+
+    if cfg.cli_opt.no_window {
+        let surface = sdl2::surface::Surface::new(
+            nat_ceil(&window_dim.width),
+            nat_ceil(&window_dim.height),
+            sdl2::pixels::PixelFormatEnum::RGBA8888,
+        )?;
+        let mut canvas = surface.into_canvas()?;
+        event_loop(cfg, window_dim, sdl, &mut canvas).await?;
+    } else {
+        let video_subsystem = sdl.video()?;
+        let window = video_subsystem
+            .window(
+                "ic-game-terminal",
+                nat_ceil(&window_dim.width),
+                nat_ceil(&window_dim.height),
+            )
+            .position_centered()
+            .resizable()
+            //.input_grabbed()
+            //.fullscreen()
+            //.fullscreen_desktop()
+            .build()
+            .map_err(|e| e.to_string())?;
+
+        let mut canvas = window
+            .into_canvas()
+            .target_texture()
+            .present_vsync()
+            .build()
+            .map_err(|e| e.to_string())?;
+
+        event_loop(cfg, window_dim, sdl, &mut canvas).await?;
+    };
+    Ok(())
 }
 
 pub async fn server_call(cfg: &ConnectConfig, call: ServerCall) -> IcgtResult<render::Result> {
@@ -694,7 +721,7 @@ fn main() {
                 cli_opt,
             };
             info!("Connecting to IC canister: {:?}", cfg);
-            runtime.block_on(do_event_loop(cfg)).ok();
+            runtime.block_on(start_event_loop(cfg)).ok();
         }
     }
 }

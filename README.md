@@ -20,31 +20,39 @@ For creating interactive graphics and games.
 #### Text editor
 
 ```
-./textEdit.sh
+./scripts/textEdit.sh
 ```
 
-The script invokes the following commands (eliding some details):
+The script invokes several `dfx` commands, and builds the terminal binary.
 
-```
-dfx -vv start --clean --background
-dfx canister create textEdit
+Eliding some details, it works in three stages:
 
-dfx build textEdit
-dfx canister install textEdit
+1. The first two commands start the replica and create an identifier for the canister.
 
-cargo run --release -- connect 127.0.0.1:8000 `dfx canister id textEdit`
-```
+  ```
+  dfx -vv start --clean --background
+  dfx canister create textEdit
+  ```
 
-The first two commands start the replica and create an identifier for the canister.
+2. The next two commands build the canister from Motoko source code and install it into the running replica's state.
 
-The next two commands build the canister from Motoko source code and install it into the running replica's state.
+  ```
+  dfx build textEdit
+  dfx canister install textEdit
+  ```
 
-The final command builds and attaches the (local) terminal process to the (remote) canister running in the replica.
+3. The final command builds and attaches the (local) terminal process to the (remote) canister running in the replica.
+
+  ```
+  cargo run --release -- connect 127.0.0.1:8000 `dfx canister id textEdit`
+  ```
 
 
 #### Maze game
 
-
+```
+./scripts/mazeGame.sh
+```
 
 
 

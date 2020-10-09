@@ -20,7 +20,7 @@ use clap::Shell;
 extern crate structopt;
 use structopt::StructOpt;
 
-use candid::{Decode, Encode};
+use candid::Decode;
 use ic_agent::Agent;
 use ic_types::Principal;
 
@@ -39,6 +39,10 @@ use tokio::task;
 #[derive(StructOpt, Debug, Clone)]
 #[structopt(name = "icgt", raw(setting = "clap::AppSettings::DeriveDisplayOrder"))]
 pub struct CliOpt {
+    /// No window for graphics output.
+    /// Filesystem-based graphics output only.
+    #[structopt(short = "W", long = "no-window")]
+    no_window: bool,
     /// Enable tracing -- the most verbose log.
     #[structopt(short = "t", long = "trace-log")]
     log_trace: bool,
@@ -80,17 +84,11 @@ pub struct ConnectConfig {
 /// Messages that go from this terminal binary to the server cansiter
 #[derive(Debug, Clone)]
 pub enum ServerCall {
-    // to do -- include the local clock, or a duration since last tick;
-    // we don't have time in the server
-    Tick,
-
-    WindowSizeChange(render::Dim),
-
     // to do -- more generally, query msg that projects events' outcome
-    QueryKeyDown(Vec<event::KeyEventInfo>),
+    View(render::Dim, Vec<event::Event>),
 
     // to do -- more generally, update msg that pushes events
-    UpdateKeyDown(Vec<event::KeyEventInfo>),
+    Update(Vec<event::Event>),
 }
 
 /// Errors from the game terminal, or its subcomponents
@@ -275,7 +273,7 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
                 width: Nat::from(*w as u64),
                 height: Nat::from(*h as u64),
             };
-            Some(event::Event::WindowSizeChange(dim))
+            Some(event::Event::WindowSize(dim))
         }
         SysEvent::Quit { .. }
         | SysEvent::KeyDown {
@@ -395,14 +393,14 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
                     return None;
                 }
             };
-            let event = event::Event::KeyDown(event::KeyEventInfo {
+            let event = event::Event::KeyDown(vec![event::KeyEventInfo {
                 key: key,
                 // to do -- translate modifier keys,
                 alt: false,
                 ctrl: false,
                 meta: false,
                 shift: shift,
-            });
+            }]);
             Some(event)
         }
         _ => None,
@@ -441,79 +439,75 @@ pub async fn redraw<T: RenderTarget>(
 
 async fn do_update_task(
     cfg: ConnectConfig,
-    window_dim: render::Dim,
     remote_in: mpsc::Receiver<ServerCall>,
-    remote_out: mpsc::Sender<render::Result>,
+    remote_out: mpsc::Sender<()>,
 ) -> IcgtResult<()> {
-    let rr: render::Result = server_call(&cfg, ServerCall::WindowSizeChange(window_dim)).await?;
-    remote_out.send(rr).unwrap();
+    println!("Update task: Begin.");
+    println!("Update task: Pausing (for empty, initial update's response from server).");
+    server_call(&cfg, ServerCall::Update(vec![])).await?;
+    remote_out.send(()).unwrap();
     loop {
-        debug!("Update task: Loop head: Waiting for next ServerCall");
+        println!("Update task: Loop head: Waiting for next ServerCall request");
         let sc = remote_in.recv().unwrap();
-        debug!("Update task: Request for ServerCall:\n{:?}", sc);
+        println!("Update task: Request for ServerCall:\n{:?}", sc);
         let rr = server_call(&cfg, sc).await?;
-        debug!("Update task: Response for ServerCall:\n{:?}", rr);
-        debug!("Update task: Waiting to draw.");
-        remote_out.send(rr).unwrap();
-        debug!("Update task: Loop body done. Looping.");
+        println!("Update task: Response for ServerCall:\n{:?}", rr);
+        println!("Update task: Waiting to draw.");
+        remote_out.send(()).unwrap();
+        println!("Update task: Loop body done. Looping.");
     }
 }
 
-pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
-    use sdl2::event::EventType;
-    let mut q_key_infos = vec![];
-    let mut u_key_infos = vec![];
-    let mut window_dim = render::Dim {
-        width: Nat::from(1000),
-        height: Nat::from(666),
-    };
-    let sdl_context = sdl2::init()?;
-    let video_subsystem = sdl_context.video()?;
-    let window = video_subsystem
-        .window(
-            "ic-game-terminal",
-            nat_ceil(&window_dim.width),
-            nat_ceil(&window_dim.height),
-        )
-        .position_centered()
-        .resizable()
-        //.input_grabbed()
-        //.fullscreen()
-        //.fullscreen_desktop()
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let mut canvas = window
-        .into_canvas()
-        .target_texture()
-        .present_vsync()
-        .build()
-        .map_err(|e| e.to_string())?;
+async fn event_loop<T: RenderTarget>(
+    cfg: ConnectConfig,
+    window_dim_: render::Dim,
+    sdl: sdl2::Sdl,
+    canvas: &mut Canvas<T>,
+) -> Result<(), IcgtError> {
     info!("SDL canvas.info().name => \"{}\"", canvas.info().name);
 
     let cfg2 = cfg.clone();
-    let window_dim2 = window_dim.clone();
+    let mut window_dim = window_dim_.clone();
+
+    let mut q_key_infos = vec![];
+    let mut u_key_infos = vec![];
 
     // ---------------------------------------------------------------------
+
     // Interaction cycle as two halves (local/remote); each half is a thread.
     // There are four end points along the cycle's halves:
+
     let (local_out, remote_in) = mpsc::channel::<ServerCall>();
-    let (remote_out, local_in) = mpsc::channel::<render::Result>();
+    let (remote_out, local_in) = mpsc::channel::<()>();
 
     // 1. Remote interactions via update calls to server.
     // (Consumes remote_in and produces remote_out).
-    task::spawn(do_update_task(cfg2, window_dim2, remote_in, remote_out));
+
+    task::spawn(do_update_task(cfg2, remote_in, remote_out));
+
+    let mut update_requests = Nat::from(1); // count update task requests (already one).
+    let mut update_responses = Nat::from(0); // count update task responses (none yet).
 
     // 2. Local interactions via the SDL Event loop.
     // (Consumes local_in and produces local_out).
+
     let mut event_pump = {
-        let mut p = sdl_context.event_pump()?;
+        use sdl2::event::EventType;
+        let mut p = sdl.event_pump()?;
         p.disable_event(EventType::FingerUp);
         p.disable_event(EventType::FingerDown);
         p.disable_event(EventType::FingerMotion);
         p.disable_event(EventType::MouseMotion);
         p
     };
+
+    // initial draw (not really a "redraw" yet):
+    {
+        let rr = server_call(&cfg, ServerCall::View(window_dim.clone(), vec![])).await?;
+        redraw(canvas, &window_dim, &rr.unwrap()).await?;
+    };
+
+    // main loop
     'running: loop {
         if let Some(system_event) = event_pump.wait_event_timeout(13) {
             let event = translate_system_event(&system_event);
@@ -524,39 +518,49 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
             trace!("SDL event_pump.wait_event() => {:?}", &system_event);
             // catch window resize event: redraw and loop:
             match event {
+                event::Event::MouseDown(_) => {
+                    // ignore (for now)
+                }
                 event::Event::Quit => {
                     debug!("Quit");
                     return Ok(());
                 }
-                event::Event::WindowSizeChange(new_dim) => {
-                    debug!("WindowSizeChange {:?}", new_dim);
-                    let rr: render::Result =
-                        server_call(&cfg, ServerCall::WindowSizeChange(new_dim.clone())).await?;
+                event::Event::WindowSize(new_dim) => {
+                    debug!("WindowSize {:?}", new_dim);
                     window_dim = new_dim;
-                    redraw(&mut canvas, &window_dim, &rr).await?;
+                    let mut buffer = u_key_infos.clone();
+                    buffer.append(&mut (q_key_infos.clone()));
+                    let rr =
+                        server_call(&cfg, ServerCall::View(window_dim.clone(), buffer.clone()))
+                            .await?;
+                    redraw(canvas, &window_dim, &rr.unwrap()).await?;
                 }
-                event::Event::KeyUp(ref ke_info) => debug!("KeyUp {:?}", ke_info.key),
-                event::Event::KeyDown(ref ke_info) => {
-                    debug!("KeyDown {:?}", ke_info.key);
-                    q_key_infos.push(ke_info.clone());
+                event::Event::KeyDown(ref keys) => {
+                    debug!("KeyDown {:?}", keys);
+                    q_key_infos.push(event::Event::KeyDown(keys.clone()));
                     let rr: render::Result = {
                         let mut buffer = u_key_infos.clone();
                         buffer.append(&mut (q_key_infos.clone()));
                         let rr =
-                            server_call(&cfg, ServerCall::QueryKeyDown(buffer.clone())).await?;
-                        rr
+                            server_call(&cfg, ServerCall::View(window_dim.clone(), buffer.clone()))
+                                .await?;
+                        rr.unwrap()
                     };
-                    redraw(&mut canvas, &window_dim, &rr).await?;
+                    redraw(canvas, &window_dim, &rr).await?;
                 }
             }
         };
         // Is update task is ready for input?
         // (Signaled by local_in being ready to read.)
         match local_in.try_recv() {
-            Ok(_rr) => {
+            Ok(()) => {
+                update_responses += 1;
+                info!("update_responses = {}", update_responses);
                 local_out
-                    .send(ServerCall::UpdateKeyDown(q_key_infos.clone()))
+                    .send(ServerCall::Update(q_key_infos.clone()))
                     .unwrap();
+                update_requests += 1;
+                info!("update_requests = {}", update_requests);
                 u_key_infos = q_key_infos;
                 q_key_infos = vec![];
             }
@@ -567,7 +571,55 @@ pub async fn do_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
     }
 }
 
-pub async fn server_call(cfg: &ConnectConfig, call: ServerCall) -> IcgtResult<render::Result> {
+async fn start_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
+    let window_dim = render::Dim {
+        width: Nat::from(1000),
+        height: Nat::from(666),
+    };
+    let sdl = sdl2::init()?;
+
+    if cfg.cli_opt.no_window {
+        let surface = sdl2::surface::Surface::new(
+            nat_ceil(&window_dim.width),
+            nat_ceil(&window_dim.height),
+            sdl2::pixels::PixelFormatEnum::RGBA8888,
+        )?;
+        let mut canvas = surface.into_canvas()?;
+        event_loop(cfg, window_dim, sdl, &mut canvas).await?;
+    } else {
+        let video_subsystem = sdl.video()?;
+        let window = video_subsystem
+            .window(
+                "ic-game-terminal",
+                nat_ceil(&window_dim.width),
+                nat_ceil(&window_dim.height),
+            )
+            .position_centered()
+            .resizable()
+            //.input_grabbed()
+            //.fullscreen()
+            //.fullscreen_desktop()
+            .build()
+            .map_err(|e| e.to_string())?;
+
+        let mut canvas = window
+            .into_canvas()
+            .target_texture()
+            .present_vsync()
+            .build()
+            .map_err(|e| e.to_string())?;
+
+        event_loop(cfg, window_dim, sdl, &mut canvas).await?;
+    };
+    Ok(())
+}
+
+// to do -- fix hack; refactor to remove Option<_> in return type
+
+pub async fn server_call(
+    cfg: &ConnectConfig,
+    call: ServerCall,
+) -> IcgtResult<Option<render::Result>> {
     debug!(
         "server_call: to canister_id {:?} at replica_url {:?}",
         cfg.canister_id, cfg.replica_url
@@ -581,10 +633,8 @@ pub async fn server_call(cfg: &ConnectConfig, call: ServerCall) -> IcgtResult<re
     let timestamp = std::time::SystemTime::now();
     info!("server_call: {:?}", call);
     let arg_bytes = match call.clone() {
-        ServerCall::Tick => Encode!(&()).unwrap(),
-        ServerCall::WindowSizeChange(window_dim) => Encode!(&window_dim).unwrap(),
-        ServerCall::QueryKeyDown(keys) => Encode!(&keys).unwrap(),
-        ServerCall::UpdateKeyDown(keys) => Encode!(&keys).unwrap(),
+        ServerCall::View(window_dim, evs) => candid::encode_args((window_dim, evs)).unwrap(),
+        ServerCall::Update(evs) => candid::encode_args((evs,)).unwrap(),
     };
     info!(
         "server_call: Encoded argument via Candid; Arg size {:?} bytes",
@@ -593,36 +643,17 @@ pub async fn server_call(cfg: &ConnectConfig, call: ServerCall) -> IcgtResult<re
     info!("server_call: Awaiting response from server...");
     // do an update or query call, based on the ServerCall case:
     let blob_res = match call.clone() {
-        ServerCall::Tick => {
-            /*
-            runtime.block_on(agent.update(
-                &canister_id,
-                &"tick",
-                &Blob(arg_bytes),
-                delay,
-            ))
-            */
-            unimplemented!()
-        }
-        ServerCall::WindowSizeChange(_window_dim) => {
+        ServerCall::View(_window_dim, _keys) => {
             let resp = agent
-                .update(&canister_id, &"windowSizeChange")
-                .with_arg(arg_bytes)
-                .call_and_wait(delay)
-                .await?;
-            Some(resp)
-        }
-        ServerCall::QueryKeyDown(_keys) => {
-            let resp = agent
-                .query(&canister_id, &"queryKeyDown")
+                .query(&canister_id, "view")
                 .with_arg(arg_bytes)
                 .call()
                 .await?;
             Some(resp)
         }
-        ServerCall::UpdateKeyDown(_keys) => {
+        ServerCall::Update(_keys) => {
             let resp = agent
-                .update(&canister_id, &"updateKeyDown")
+                .update(&canister_id, "update")
                 .with_arg(arg_bytes)
                 .call_and_wait(delay)
                 .await?;
@@ -636,30 +667,33 @@ pub async fn server_call(cfg: &ConnectConfig, call: ServerCall) -> IcgtResult<re
             blob_res.len(),
             elapsed
         );
-        match Decode!(&(*blob_res), render::Result) {
-            Ok(res) => {
-                if cfg.cli_opt.log_trace {
-                    let mut res_log = format!("{:?}", &res);
-                    if res_log.len() > 1000 {
-                        res_log.truncate(1000);
-                        res_log.push_str("...(truncated)");
+        match call.clone() {
+            ServerCall::Update(_) => Ok(None),
+            ServerCall::View(_, _) => match candid::Decode!(&(*blob_res), render::Result) {
+                Ok(res) => {
+                    if cfg.cli_opt.log_trace {
+                        let mut res_log = format!("{:?}", &res);
+                        if res_log.len() > 1000 {
+                            res_log.truncate(1000);
+                            res_log.push_str("...(truncated)");
+                        }
+                        trace!(
+                            "server_call: Successful decoding of graphics output: {:?}",
+                            res_log
+                        );
                     }
-                    trace!(
-                        "server_call: Successful decoding of graphics output: {:?}",
-                        res_log
-                    );
+                    Ok(Some(res))
                 }
-                Ok(res)
-            }
-            Err(candid_err) => {
-                error!("Candid decoding error: {:?}", candid_err);
-                Err(IcgtError::String("decoding error".to_string()))
-            }
+                Err(candid_err) => {
+                    error!("Candid decoding error: {:?}", candid_err);
+                    Err(IcgtError::String("decoding error".to_string()))
+                }
+            },
         }
     } else {
         let res = format!("{:?}", blob_res);
         info!("..error result {:?}", res);
-        Err(IcgtError::String("tick error".to_string()))
+        Err(IcgtError::String("ic-gt error".to_string()))
     }
 }
 
@@ -694,7 +728,7 @@ fn main() {
                 cli_opt,
             };
             info!("Connecting to IC canister: {:?}", cfg);
-            runtime.block_on(do_event_loop(cfg)).ok();
+            runtime.block_on(start_event_loop(cfg)).ok();
         }
     }
 }

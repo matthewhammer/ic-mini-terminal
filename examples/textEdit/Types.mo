@@ -6,6 +6,8 @@ import TextSeq "mo:sequence/Text";
 import Seq "mo:sequence/Sequence";
 import Stream "mo:sequence/Stream";
 
+import RedrawTypes "mo:redraw/Types";
+
 module {
 
 public type Dir2D = {
@@ -13,14 +15,6 @@ public type Dir2D = {
   #down;
   #left;
   #right
-};
-
-public type KeyInfo = {
-  key : Text;
-  alt : Bool;
-  ctrl : Bool;
-  meta: Bool;
-  shift: Bool
 };
 
 public type Elm = {
@@ -37,7 +31,11 @@ public type State = {
   var bwd : TextSeq;
 };
 
-// move results back to game client:
-public type ResOut = Result.Result<Render.Out, Render.Out>;
+// input events (from local terminal to remote service)
+public type Event = RedrawTypes.Event.Event;
+public type KeyInfo = RedrawTypes.Event.KeyInfo;
+
+// graphical output (from remote service to local terminal)
+public type Graphics = RedrawTypes.Graphics.Result;
 
 }

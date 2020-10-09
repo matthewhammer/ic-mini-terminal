@@ -76,7 +76,7 @@ module {
 
   // --------------------------------------------------------
 
-  public func drawState(st:State, isQueryView:Bool) : Render.Elm {
+  public func drawState(st : State, windowDim : Render.Dim) : Render.Elm {
 
     let r = Render.Render();
     let cr = Render.CharRender(r, Mono5x5.bitmapOfChar,
@@ -89,19 +89,11 @@ module {
     let tr = Render.TextRender(cr);
 
     r.begin(#flow(vert)); // Display begin
-    r.fill(
-      if isQueryView
-        #open((200, 255, 200), 1)
-      else
-        #open((255, 255, 0), 1)
-    );
-
-    // Title line:
-    let queryViewMsg = if isQueryView " (q)" else "";
+    r.fill(#open((255, 255, 0), 1));
 
     {
       r.begin(#flow(horz));
-      tr.textAtts("Hello world" # queryViewMsg, taTitleText());
+      tr.textAtts("textEdit! (hobby graphics demo in Motoko)", taTitleText());
       r.end();
     };
     func isNewline(c : Text) : Bool = {

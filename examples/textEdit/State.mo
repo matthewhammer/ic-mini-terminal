@@ -1,6 +1,5 @@
 import Types "Types";
 
-import Debug "mo:base/Debug";
 import List "mo:base/List";
 import Result "mo:base/Result";
 
@@ -125,6 +124,18 @@ module {
     for (key in keys.vals()) { keyDown(st, key) };
   };
 
+  public func update(st : State, events : [Types.Event]) {
+    for (ev in events.vals()) {
+      switch ev {
+        case (#keyDown(keys)) keyDownSeq(st, keys);
+        // ignore other events (for now):
+        case (#quit) { };
+        case (#mouseDown(_)) { };
+        case (#windowSize(_)) { };
+      }
+    }
+  };
+
   public func initState() : Types.State {
      {
        levels = Stream.Bernoulli.seedFrom(0);
@@ -181,7 +192,6 @@ module {
   };
 
   func move(st : State, dir : Types.Dir2D) {
-    Debug.print ("State.move" # debug_show dir);
     switch dir {
       case (#left) {
              switch (Seq.popBack(st.bwd)) {
@@ -211,7 +221,6 @@ module {
   };
 
   func insert(st : State, elm : Types.Elm) {
-    Debug.print ("State.insert" # debug_show elm);
     switch elm {
       case (#text(t)) {
         st.bwd := Seq.pushBack(st.bwd, st.levels.next(), t)
@@ -220,7 +229,6 @@ module {
   };
 
   func delete(st : State, dir : {#fwd; #bwd}) {
-    Debug.print ("State.delete" # debug_show dir);
     switch dir {
       case (#bwd) {
              switch (Seq.popBack(st.bwd)) {

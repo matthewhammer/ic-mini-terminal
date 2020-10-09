@@ -17,5 +17,8 @@ dfx canister call textEdit windowSizeChange 'record {width=100; height=100; }' &
 echo canister call textEdit queryKeyDown &&\
 dfx canister call textEdit queryKeyDown 'vec { }' &&\
 \
+echo dfx stop &&\
+dfx stop &&\
+\
 echo Tests done. Success.
 

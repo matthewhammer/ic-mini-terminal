@@ -21,7 +21,7 @@ See examples:
 
 #### Text editor
 
-![Text editor screenshot](img/mazeGame-202010091219.png)
+![Text editor screenshot](img/textEdit-202010091219.png)
 
 Run the text edtior demo in a local replica (using `dfx`):
 

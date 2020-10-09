@@ -448,9 +448,14 @@ async fn do_update_task(
     let rr: render::Result = server_call(&cfg, ServerCall::WindowSizeChange(window_dim)).await?;
     remote_out.send(rr).unwrap();
     loop {
+        debug!("Update task: Loop head: Waiting for next ServerCall");
         let sc = remote_in.recv().unwrap();
+        debug!("Update task: Request for ServerCall:\n{:?}", sc);
         let rr = server_call(&cfg, sc).await?;
+        debug!("Update task: Response for ServerCall:\n{:?}", rr);
+        debug!("Update task: Waiting to draw.");
         remote_out.send(rr).unwrap();
+        debug!("Update task: Loop body done. Looping.");
     }
 }
 

@@ -43,10 +43,14 @@ pub mod event {
 
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Event {
+        #[serde(rename(serialize = "quit"))]
         Quit,
-        KeyDown(KeyEventInfo),
-        KeyUp(KeyEventInfo),
-        WindowSizeChange(super::render::Dim),
+        #[serde(rename(serialize = "keyDown"))]
+        KeyDown(Vec<KeyEventInfo>),
+        #[serde(rename(serialize = "mouseDown"))]
+        MouseDown(super::render::Pos),
+        #[serde(rename(serialize = "windowSize"))]
+        WindowSize(super::render::Dim),
     }
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub struct KeyEventInfo {

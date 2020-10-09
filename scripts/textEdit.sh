@@ -6,5 +6,5 @@ dfx canister create textEdit &&\
 dfx build textEdit &&\
 dfx canister install textEdit ||\
 dfx canister install textEdit --mode=reinstall &&\
-cargo run --release -- -d connect 127.0.0.1:8000 `dfx canister id textEdit`
+cargo run --release -- connect 127.0.0.1:8000 `dfx canister id textEdit`
 

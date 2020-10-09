@@ -1,5 +1,5 @@
 #!/bin/bash
-dfx -vv start --clean --background &&\
+dfx -vv start --background &&\
 dfx canister create textEdit &&\
 dfx build textEdit &&\
 dfx canister install textEdit &&\

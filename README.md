@@ -14,38 +14,68 @@ For creating interactive graphics and games.
 
 ### Quick starts
 
+See examples:
+
  * [Text editor](#text-editor)
  * [Maze game](#maze-game)
 
 #### Text editor
 
-```
-./textEdit.sh
-```
-
-The script invokes the following commands (eliding some details):
+Run the text edtior demo in a local replica (using `dfx`):
 
 ```
-dfx -vv start --clean --background
-dfx canister create textEdit
-
-dfx build textEdit
-dfx canister install textEdit
-
-cargo run --release -- connect 127.0.0.1:8000 `dfx canister id textEdit`
+./scripts/textEdit.sh
 ```
 
-The first two commands start the replica and create an identifier for the canister.
+The script invokes several `dfx` commands, and builds the terminal binary.
 
-The next two commands build the canister from Motoko source code and install it into the running replica's state.
+Eliding some details, it works in three stages:
 
-The final command builds and attaches the (local) terminal process to the (remote) canister running in the replica.
+1. The first two commands start the replica and create an identifier for the canister:
+
+  ```
+  dfx -vv start --clean --background
+  dfx canister create textEdit
+  ```
+
+2. The next two commands build the canister from Motoko source code and install it into the running replica's state:
+
+  ```
+  dfx build textEdit
+  dfx canister install textEdit
+  ```
+
+3. The final command builds and attaches the (local) terminal process to the (remote) canister running in the replica:
+
+  ```
+  cargo run --release -- connect 127.0.0.1:8000 `dfx canister id textEdit`
+  ```
+
+
+##### Developer notes
+
+- By repeating (only) the `dfx build` and `dfx canister install` steps,
+  one can rebuild and re-install the canister within the same replica process.
+
+- By deleting `.vessel` when some (external) package of Motoko source changes,
+  one triggers a new clone of the (updated) code, and afterward, `dfx build` will incorporate this updated code.
+
+- The local terminal should keep working with the new (`reinstall`ed) canister.
+
+- Re-running the `cargo run` step is needed if one modifies the terminal source code (in Rust).
+
+
 
 
 #### Maze game
 
+Invoke the maze game as follows:
 
+```
+./scripts/mazeGame.sh
+```
 
+This script follows the same `dfx`-based scripting template as [`textEdit`](#text-editor), where more details are explained.
 
 
 # Inspired by

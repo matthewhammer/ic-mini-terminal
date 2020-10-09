@@ -21,6 +21,8 @@ See examples:
 
 #### Text editor
 
+![Text editor screenshot](img/mazeGame-202010091219.png)
+
 Run the text edtior demo in a local replica (using `dfx`):
 
 ```
@@ -68,6 +70,8 @@ Eliding some details, it works in three stages:
 
 
 #### Maze game
+
+![Maze game screenshot](img/mazeGame-202010091214.png)
 
 Invoke the maze game as follows:
 

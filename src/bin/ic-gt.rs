@@ -35,9 +35,9 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tokio::task;
 
-/// Internet Computer Game Terminal (icgt)
+/// Internet Computer Game Terminal (ic-gt)
 #[derive(StructOpt, Debug, Clone)]
-#[structopt(name = "icgt", raw(setting = "clap::AppSettings::DeriveDisplayOrder"))]
+#[structopt(name = "ic-gt", raw(setting = "clap::AppSettings::DeriveDisplayOrder"))]
 pub struct CliOpt {
     /// No window for graphics output.
     /// Filesystem-based graphics output only.
@@ -84,10 +84,9 @@ pub struct ConnectConfig {
 /// Messages that go from this terminal binary to the server cansiter
 #[derive(Debug, Clone)]
 pub enum ServerCall {
-    // to do -- more generally, query msg that projects events' outcome
+    // Query a projected view of the remote canister
     View(render::Dim, Vec<event::Event>),
-
-    // to do -- more generally, update msg that pushes events
+    // Update the state of the remote canister
     Update(Vec<event::Event>),
 }
 

@@ -1,9 +1,8 @@
 # IC Game Terminal
 
-Simple, direct keyboard input (⌨) and graphical output (📺) for programs on the [Internet Computer](https://dfinity.org/).
+Keyboard input (⌨) and graphical output (📺) for programs on the [Internet Computer](https://dfinity.org/).
 
-For creating interactive graphics and games.
-
+Common representations via [redraw-motoko](https://github.com/matthewhammer/motoko-redraw) package.
 
 ## Building and testing
 

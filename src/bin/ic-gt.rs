@@ -88,6 +88,8 @@ pub enum ServerCall {
     View(render::Dim, Vec<event::Event>),
     // Update the state of the remote canister
     Update(Vec<event::Event>),
+    // To process user request to quit interaction
+    FlushQuit,
 }
 
 /// Errors from the game terminal, or its subcomponents
@@ -433,6 +435,9 @@ pub async fn redraw<T: RenderTarget>(
         _ => unimplemented!(),
     };
     canvas.present();
+    // to do -- if enabled, dump canvas as .BMP file to next output image file in the stream that we are producing
+    // https://docs.rs/sdl2/0.34.3/sdl2/render/struct.Canvas.html#method.into_surface
+    // https://docs.rs/sdl2/0.34.3/sdl2/surface/struct.Surface.html#method.save_bmp
     Ok(())
 }
 
@@ -448,7 +453,14 @@ async fn do_update_task(
     loop {
         println!("Update task: Loop head: Waiting for next ServerCall request");
         let sc = remote_in.recv().unwrap();
-        println!("Update task: Request for ServerCall:\n{:?}", sc);
+        println!(
+            "Update task: Request for ServerCall:\n{:?}
+",
+            sc
+        );
+        if let ServerCall::FlushQuit = sc {
+            return Ok(());
+        };
         let rr = server_call(&cfg, sc).await?;
         println!("Update task: Response for ServerCall:\n{:?}", rr);
         println!("Update task: Waiting to draw.");
@@ -483,6 +495,8 @@ async fn event_loop<T: RenderTarget>(
     // (Consumes remote_in and produces remote_out).
 
     task::spawn(do_update_task(cfg2, remote_in, remote_out));
+
+    let mut quit_request = false;
 
     let mut update_requests = Nat::from(1); // count update task requests (already one).
     let mut update_responses = Nat::from(0); // count update task responses (none yet).
@@ -522,7 +536,9 @@ async fn event_loop<T: RenderTarget>(
                 }
                 event::Event::Quit => {
                     debug!("Quit");
-                    return Ok(());
+                    println!("Begin: Quitting...");
+                    println!("Waiting for next update response...");
+                    quit_request = true;
                 }
                 event::Event::WindowSize(new_dim) => {
                     debug!("WindowSize {:?}", new_dim);
@@ -558,6 +574,18 @@ async fn event_loop<T: RenderTarget>(
                 local_out
                     .send(ServerCall::Update(q_key_infos.clone()))
                     .unwrap();
+                if quit_request {
+                    println!("Continue: Quitting...");
+                    println!("Waiting for final update response.");
+                    match local_in.try_recv() {
+                        Ok(()) => {
+                            local_out.send(ServerCall::FlushQuit).unwrap();
+                            println!("Done.");
+                            return Ok(());
+                        }
+                        Err(e) => return Err(IcgtError::String(e.to_string())),
+                    }
+                };
                 update_requests += 1;
                 info!("update_requests = {}", update_requests);
                 u_key_infos = q_key_infos;
@@ -589,7 +617,7 @@ async fn start_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
         let video_subsystem = sdl.video()?;
         let window = video_subsystem
             .window(
-                "ic-game-terminal",
+                "IC Game Terminal",
                 nat_ceil(&window_dim.width),
                 nat_ceil(&window_dim.height),
             )
@@ -619,6 +647,9 @@ pub async fn server_call(
     cfg: &ConnectConfig,
     call: ServerCall,
 ) -> IcgtResult<Option<render::Result>> {
+    if let ServerCall::FlushQuit = call {
+        return Ok(None);
+    };
     debug!(
         "server_call: to canister_id {:?} at replica_url {:?}",
         cfg.canister_id, cfg.replica_url
@@ -632,6 +663,7 @@ pub async fn server_call(
     let timestamp = std::time::SystemTime::now();
     info!("server_call: {:?}", call);
     let arg_bytes = match call.clone() {
+        ServerCall::FlushQuit => candid::encode_args(()).unwrap(),
         ServerCall::View(window_dim, evs) => candid::encode_args((window_dim, evs)).unwrap(),
         ServerCall::Update(evs) => candid::encode_args((evs,)).unwrap(),
     };
@@ -642,6 +674,7 @@ pub async fn server_call(
     info!("server_call: Awaiting response from server...");
     // do an update or query call, based on the ServerCall case:
     let blob_res = match call.clone() {
+        ServerCall::FlushQuit => None,
         ServerCall::View(_window_dim, _keys) => {
             let resp = agent
                 .query(&canister_id, "view")
@@ -667,6 +700,7 @@ pub async fn server_call(
             elapsed
         );
         match call.clone() {
+            ServerCall::FlushQuit => Ok(None),
             ServerCall::Update(_) => Ok(None),
             ServerCall::View(_, _) => match candid::Decode!(&(*blob_res), render::Result) {
                 Ok(res) => {

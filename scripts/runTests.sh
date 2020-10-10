@@ -11,11 +11,11 @@ dfx build textEdit &&\
 echo canister install &&\
 dfx canister install textEdit &&\
 \
-echo canister call textEdit windowSizeChange &&\
-dfx canister call textEdit windowSizeChange 'record {width=100; height=100; }' &&\
+echo canister call textEdit update &&\
+dfx canister call textEdit update 'vec { }' &&\
 \
-echo canister call textEdit queryKeyDown &&\
-dfx canister call textEdit queryKeyDown 'vec { }' &&\
+echo canister call textEdit query  &&\
+dfx canister call textEdit query '(record {width=100; height=100;}, vec { })' &&\
 \
 echo dfx stop &&\
 dfx stop &&\

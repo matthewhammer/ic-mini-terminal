@@ -63,19 +63,19 @@ module {
   func taTitleText(lineNo : Nat) : Atts =
     switch lineNo {
     case 0 {
-           zoom=3;
-           fgFill=#closed((0, 0, 0));
-           bgFill=#closed((220, 200, 240));
+           zoom=4;
+           fgFill=#closed((60, 255, 100));
+           bgFill=#closed((60, 0, 60));
          };
     case 1 {
            zoom=2;
-           fgFill=#closed((200, 160, 220));
+           fgFill=#closed((160, 255, 200));
            bgFill=#closed((0, 0, 0));
          };
     case 2 {
-           zoom=3;
-           fgFill=#closed((200, 160, 220));
-           bgFill=#closed((0, 0, 0));
+           zoom=2;
+           fgFill=#closed((60, 255, 100));
+           bgFill=#closed((60, 0, 60));
          };
     case _ {
            zoom=3;

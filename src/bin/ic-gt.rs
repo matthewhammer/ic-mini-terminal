@@ -115,6 +115,13 @@ impl std::convert::From<ic_agent::AgentError> for IcgtError {
         IcgtError::Agent()
     }
 }
+
+impl std::convert::From<std::sync::mpsc::SendError<ServerCall>> for IcgtError {
+    fn from(_s: std::sync::mpsc::SendError<ServerCall>) -> Self {
+        IcgtError::String("send error".to_string())
+    }
+}
+
 impl std::convert::From<String> for IcgtError {
     fn from(s: String) -> Self {
         IcgtError::String(s)
@@ -457,8 +464,8 @@ async fn do_update_task(
 ) -> IcgtResult<()> {
     println!("Update task: Begin.");
     println!("Update task: Pausing (for empty, initial update's response from server).");
-    server_call(&cfg, ServerCall::Update(vec![])).await?;
-    remote_out.send(()).unwrap();
+    //server_call(&cfg, ServerCall::Update(vec![])).await?;
+    //remote_out.send(()).unwrap();
     loop {
         println!("Update task: Loop head: Waiting for next ServerCall request");
         let sc = remote_in.recv().unwrap();
@@ -504,6 +511,7 @@ async fn event_loop<T: RenderTarget>(
     // (Consumes remote_in and produces remote_out).
 
     task::spawn(do_update_task(cfg2, remote_in, remote_out));
+    local_out.send(ServerCall::Init(cfg.init_args.clone()))?;
 
     let mut quit_request = false;
 
@@ -687,9 +695,9 @@ pub async fn server_call(
         ServerCall::FlushQuit => None,
         ServerCall::Init(_) => {
             let resp = agent
-                .query(&canister_id, "init")
+                .update(&canister_id, "init")
                 .with_arg(arg_bytes)
-                .call()
+                .call_and_wait(delay)
                 .await?;
             Some(resp)
         }
@@ -778,8 +786,8 @@ fn main() {
             // to do -- FIX ME
             drop(init_args_text);
             let init_args : InitArgs = {
-                ("Bob".to_string(),
-                 (Nat::from(255), Nat::from(100), Nat::from(100)))
+                ("Bob (TEMP)".to_string(),
+                 (Nat::from(210), Nat::from(150), Nat::from(220)))
             };
 
             let cfg = ConnectConfig {

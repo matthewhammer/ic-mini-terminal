@@ -12,13 +12,13 @@ echo canister install &&\
 dfx canister install textEdit &&\
 \
 echo canister call textEdit view  &&\
-dfx canister call --output raw textEdit view '(record {width=100; height=100;}, vec { })' &&\
+dfx canister call --output idl textEdit view '(record {width=100; height=100;}, vec { })' &&\
 \
 echo canister call textEdit update &&\
-dfx canister call --output raw textEdit update 'vec { }' &&\
+dfx canister call --output idl textEdit update 'vec { }' &&\
 \
 echo canister call textEdit view  &&\
-dfx canister call --output raw textEdit view '(record {width=100; height=100;}, vec { })' &&\
+dfx canister call --output idl view '(record {width=100; height=100;}, vec { })' &&\
 \
 echo dfx stop &&\
 dfx stop &&\

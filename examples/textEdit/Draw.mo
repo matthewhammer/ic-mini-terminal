@@ -60,11 +60,32 @@ module {
   func attsLegendTextHi() : Atts =
     attsLegendFg(#closed((220, 200, 240)));
 
-  func taTitleText() : Atts =
-    attsLegendFg(#closed((240, 200, 255)));
+  func taTitleText(lineNo : Nat) : Atts =
+    switch lineNo {
+    case 0 {
+           zoom=4;
+           fgFill=#closed((60, 255, 100));
+           bgFill=#closed((60, 0, 60));
+         };
+    case 1 {
+           zoom=2;
+           fgFill=#closed((160, 255, 200));
+           bgFill=#closed((0, 0, 0));
+         };
+    case 2 {
+           zoom=2;
+           fgFill=#closed((60, 255, 100));
+           bgFill=#closed((60, 0, 60));
+         };
+    case _ {
+           zoom=3;
+           fgFill=#closed((255, 255, 255));
+           bgFill=#closed((60, 0, 60));
+         };
+  };
 
-  func userTextAtts() : Atts =
-    attsFgBg(#closed((100, 250, 100)), #closed((0, 0, 0)));
+  func userTextAtts(st : State) : Atts =
+    attsFgBg(#closed(st.init.userTextColor), #closed((0, 0, 0)));
 
   func cursorAtts() : Atts =
     attsFgBg(#closed((200, 250, 200)), #closed((0, 0, 0)));
@@ -92,24 +113,44 @@ module {
     r.fill(#open((255, 255, 0), 1));
 
     {
-      r.begin(#flow(horz));
-      tr.textAtts("textEdit! (hobby graphics demo in Motoko)", taTitleText());
+      r.begin(#flow(vert));
+      r.fill(#open((255, 255, 255), 1));
+      {
+        r.begin(#flow(horz));
+        tr.textAtts("TextEdit", taTitleText(0));
+        tr.textAtts(" Multi-user text editor, in Motoko, for the IC)", taTitleText(1));
+        r.end();
+      };
+      { 
+        r.begin(#flow(horz));
+        tr.textAtts("Username: ", taTitleText(2));
+        tr.textAtts(st.init.userName, taTitleText(3));
+        r.end();
+      };
       r.end();
     };
-    func isNewline(c : Text) : Bool = {
-      c == "\n"
+    func isNewline(elm : Types.Elm) : Bool = {
+      switch elm {
+        case (#text(te)) { te.text == "\n" };
+      }
     };
     let (linesBefore, linesAfter) = (
-      TextSeq.flatten(Seq.tokens(st.bwd, isNewline, st.levels)),
-      TextSeq.flatten(Seq.tokens(st.fwd, isNewline, st.levels)),
+      Seq.tokens(st.bwd, isNewline, st.levels),
+      Seq.tokens(st.fwd, isNewline, st.levels),
     );
     r.begin(#flow(vert));
     {
       r.begin(#flow(horz));
-      for (tok in Seq.iter(linesBefore, #fwd)) {
+      for (line in Seq.iter(linesBefore, #fwd)) {
         r.end();
         r.begin(#flow(horz));
-        tr.textAtts(tok, userTextAtts());
+        for (elm in Seq.iter(line, #fwd)) {
+          switch elm {
+          case (#text(te)) {
+                 tr.textAtts(te.text, userTextAtts(st));
+               };
+          };
+        };
       };
       // edge case: newline char is immediately to left of cursor (begin next line)
       switch (Seq.peekBack(st.bwd)) {
@@ -122,8 +163,14 @@ module {
       case _ { };
       };
       tr.textAtts("*", cursorAtts());
-      for (tok in Seq.iter(linesAfter, #fwd)) {
-        tr.textAtts(tok, userTextAtts());
+      for (line in Seq.iter(linesAfter, #fwd)) {
+        for (elm in Seq.iter(line, #fwd)) {
+          switch elm {
+          case (#text(te)) {
+                 tr.textAtts(te.text, userTextAtts(st));
+               };
+          };
+        };
         r.end();
         r.begin(#flow(horz));
       };

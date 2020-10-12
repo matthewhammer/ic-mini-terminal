@@ -10,6 +10,10 @@ actor {
 
   flexible var state = State.initState();
 
+  public func init(userName : Text, userTextColor : Render.Color) {
+    State.init(state, userName, userTextColor)
+  };
+
   public func update(events : [Types.Event]) {
     State.update(state, events)
   };

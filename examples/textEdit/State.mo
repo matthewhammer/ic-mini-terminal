@@ -12,6 +12,13 @@ import Seq "mo:sequence/Sequence";
 module {
   type State = Types.State;
 
+  public func init(st : State, userName_ : Text, userTextColor_ : Render.Color) {
+    st.init := {
+      userName = userName_ ;
+      userTextColor = userTextColor_ ;
+    };
+  };
+
   public func keyDown(st:State, key:Types.KeyInfo) {
     switch (key.key) {
       case "ArrowLeft"  move(st, #left);
@@ -138,14 +145,19 @@ module {
 
   public func initState() : Types.State {
      {
+       var init = {
+         userName = "Chuck";
+         userTextColor = (100, 255, 100)
+       };
        levels = Stream.Bernoulli.seedFrom(0);
-       var bwd = Seq.empty<Text>();
-       var fwd = Seq.empty<Text>();
+       var bwd = Seq.empty<Types.Elm>();
+       var fwd = Seq.empty<Types.Elm>();
      }
   };
 
   public func clone(st : State) : State {
     {
+      var init = st.init;
       levels = st.levels;
       var fwd = st.fwd;
       var bwd = st.bwd;
@@ -157,6 +169,12 @@ module {
   // moveVert moves (just) past the nearest newline character, forward or backward
   // (to do -- this behavior is good enough for now, but isn't what people expect).
 
+  func elmText(elm : Types.Elm) : ?Text {
+    switch elm {
+      case (#text(te)) { ?te.text };
+    }
+  };
+
   func moveVert(st : State, dir : {#fwd; #bwd}) {
     var column : ?Nat = null;
     switch dir {
@@ -164,7 +182,7 @@ module {
            switch (Seq.peekFront(st.fwd)) {
              case null { };
              case (?f) {
-                    if (f == "\n") {
+                    if (elmText(f) == ?"\n") {
                       move(st, #right)
                     }
                     else {
@@ -178,7 +196,7 @@ module {
            switch (Seq.peekBack(st.bwd)) {
              case null { };
              case (?b) {
-                    if (b == "\n") {
+                    if (elmText(b) == ?"\n") {
                       move(st, #left)
                     }
                     else {
@@ -220,12 +238,12 @@ module {
     }
   };
 
-  func insert(st : State, elm : Types.Elm) {
-    switch elm {
-      case (#text(t)) {
-        st.bwd := Seq.pushBack(st.bwd, st.levels.next(), t)
-      };
-    }
+  func insert(st : State, preElm : { #text : Text }) {
+    let textElm : Types.Elm = #text {
+      color = st.init.userTextColor;
+      text = switch preElm { case (#text(t)) { t } };
+    };
+    st.bwd := Seq.pushBack(st.bwd, st.levels.next(), textElm)
   };
 
   func delete(st : State, dir : {#fwd; #bwd}) {

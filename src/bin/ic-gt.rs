@@ -70,6 +70,9 @@ enum CliCommand {
     Connect {
         replica_url: String,
         canister_id: String,
+        /// Initialization arguments, as a Candid textual value (default is empty tuple).
+        #[structopt(short = "i", long = "init")]
+        init_args_text: String,
     },
 }
 
@@ -79,11 +82,17 @@ pub struct ConnectConfig {
     cli_opt: CliOpt,
     canister_id: String,
     replica_url: String,
+    /// temp hack: username and user-chosen color
+    init_args: InitArgs,
 }
+
+/// temp hack: username and user-chosen color
+pub type InitArgs = (String, (Nat, Nat, Nat));
 
 /// Messages that go from this terminal binary to the server cansiter
 #[derive(Debug, Clone)]
 pub enum ServerCall {
+    Init(InitArgs),
     // Query a projected view of the remote canister
     View(render::Dim, Vec<event::Event>),
     // Update the state of the remote canister
@@ -663,6 +672,7 @@ pub async fn server_call(
     let timestamp = std::time::SystemTime::now();
     info!("server_call: {:?}", call);
     let arg_bytes = match call.clone() {
+        ServerCall::Init(args) => candid::encode_args(args).unwrap(),
         ServerCall::FlushQuit => candid::encode_args(()).unwrap(),
         ServerCall::View(window_dim, evs) => candid::encode_args((window_dim, evs)).unwrap(),
         ServerCall::Update(evs) => candid::encode_args((evs,)).unwrap(),
@@ -675,6 +685,14 @@ pub async fn server_call(
     // do an update or query call, based on the ServerCall case:
     let blob_res = match call.clone() {
         ServerCall::FlushQuit => None,
+        ServerCall::Init(_) => {
+            let resp = agent
+                .query(&canister_id, "init")
+                .with_arg(arg_bytes)
+                .call()
+                .await?;
+            Some(resp)
+        }
         ServerCall::View(_window_dim, _keys) => {
             let resp = agent
                 .query(&canister_id, "view")
@@ -701,6 +719,7 @@ pub async fn server_call(
         );
         match call.clone() {
             ServerCall::FlushQuit => Ok(None),
+            ServerCall::Init(_) => Ok(None),
             ServerCall::Update(_) => Ok(None),
             ServerCall::View(_, _) => match candid::Decode!(&(*blob_res), render::Result) {
                 Ok(res) => {
@@ -754,11 +773,20 @@ fn main() {
         CliCommand::Connect {
             canister_id,
             replica_url,
+            init_args_text,
         } => {
+            // to do -- FIX ME
+            drop(init_args_text);
+            let init_args : InitArgs = {
+                ("Bob".to_string(),
+                 (Nat::from(255), Nat::from(100), Nat::from(100)))
+            };
+
             let cfg = ConnectConfig {
                 canister_id,
                 replica_url,
                 cli_opt,
+                init_args,
             };
             info!("Connecting to IC canister: {:?}", cfg);
             runtime.block_on(start_event_loop(cfg)).ok();

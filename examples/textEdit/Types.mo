@@ -18,17 +18,29 @@ public type Dir2D = {
 };
 
 public type Elm = {
-  #text : Text
-  // more later
+  #text : TextElm
+  // more to come, in the future.
+};
+
+public type TextElm = {
+  color : Render.Color;
+  text : Text;
+  //time : Nat; -- to do, later.
 };
 
 public type Levels = Seq.Stream<Stream.Bernoulli.Value>;
-public type TextSeq = TextSeq.TextSeq;
+public type Content = Seq.Sequence<Elm>;
+
+public type Init = {
+  userName : Text;
+  userTextColor : Render.Color;
+};
 
 public type State = {
   levels : Levels;
-  var fwd : TextSeq;
-  var bwd : TextSeq;
+  var init : Init;
+  var fwd : Content;
+  var bwd : Content;
 };
 
 // input events (from local terminal to remote service)

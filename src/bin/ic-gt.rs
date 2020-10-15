@@ -607,6 +607,14 @@ async fn event_loop<T: RenderTarget>(
                 info!("update_requests = {}", update_requests);
                 u_key_infos = q_key_infos;
                 q_key_infos = vec![];
+                {
+                    let rr = server_call(
+                        &cfg,
+                        ServerCall::View(window_dim.clone(), u_key_infos.clone()),
+                    )
+                    .await?;
+                    redraw(canvas, &window_dim, &rr.unwrap()).await?;
+                };
             }
             Err(mpsc::TryRecvError::Empty) => { /* not ready; do nothing */ }
             Err(e) => error!("{:?}", e),
@@ -785,9 +793,11 @@ fn main() {
         } => {
             // to do -- FIX ME
             drop(init_args_text);
-            let init_args : InitArgs = {
-                ("Bob (TEMP)".to_string(),
-                 (Nat::from(210), Nat::from(150), Nat::from(220)))
+            let init_args: InitArgs = {
+                (
+                    "Bob (TEMP)".to_string(),
+                    (Nat::from(210), Nat::from(150), Nat::from(220)),
+                )
             };
 
             let cfg = ConnectConfig {

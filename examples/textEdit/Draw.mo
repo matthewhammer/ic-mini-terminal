@@ -118,7 +118,7 @@ module {
       {
         r.begin(#flow(horz));
         tr.textAtts("TextEdit", taTitleText(0));
-        tr.textAtts(" Multi-user text editor, in Motoko, for the IC)", taTitleText(1));
+        tr.textAtts("Multi-user text editor (in Motoko, for the IC)", taTitleText(1));
         r.end();
       };
       { 

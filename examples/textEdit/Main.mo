@@ -14,13 +14,13 @@ actor {
     State.init(state, userName, userTextColor)
   };
 
-  public func update(events : [Types.Event]) {
+  public func update(events : [Types.EventInfo]) {
     State.update(state, events)
   };
 
   public query func view(
     windowDim : Render.Dim,
-    events : [Types.Event])
+    events : [Types.EventInfo])
     : async Types.Graphics
   {
     let temp = State.clone(state);
@@ -30,7 +30,7 @@ actor {
 
   func redrawScreen(
     windowDim : Render.Dim,
-    state:Types.State)
+    state : Types.State)
     : Types.Graphics
   {
     let elm = Draw.drawState(state, windowDim);

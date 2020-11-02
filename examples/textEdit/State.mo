@@ -131,23 +131,26 @@ module {
     for (key in keys.vals()) { keyDown(st, key) };
   };
 
-  public func update(st : State, events : [Types.Event]) {
+  public func update(st : State, events : [Types.EventInfo]) {
     for (ev in events.vals()) {
-      switch ev {
+      st.currentEvent := ?ev;
+      switch (ev.event) {
+        case (#skip) { };
         case (#keyDown(keys)) keyDownSeq(st, keys);
         // ignore other events (for now):
         case (#quit) { };
         case (#mouseDown(_)) { };
         case (#windowSize(_)) { };
-      }
+      };
     }
   };
 
   public func initState() : Types.State {
      {
+       var currentEvent = (null : ?Types.EventInfo);
        var init = {
-         userName = "Chuck";
-         userTextColor = (100, 255, 100)
+         userName = "";
+         userTextColor = (255, 255, 255)
        };
        levels = Stream.Bernoulli.seedFrom(0);
        var bwd = Seq.empty<Types.Elm>();
@@ -157,6 +160,7 @@ module {
 
   public func clone(st : State) : State {
     {
+      var currentEvent = st.currentEvent;
       var init = st.init;
       levels = st.levels;
       var fwd = st.fwd;
@@ -240,7 +244,18 @@ module {
 
   func insert(st : State, preElm : { #text : Text }) {
     let textElm : Types.Elm = #text {
-      color = st.init.userTextColor;
+      lastModifyTime = switch (st.currentEvent) {
+        case null "?";
+        case (?ev) ev.dateTimeUtc;
+      };
+      lastModifyUser = switch (st.currentEvent) {
+        case null "?";
+        case (?ev) ev.userInfo.userName;
+      };
+      color = switch (st.currentEvent) {
+        case null st.init.userTextColor;
+        case (?ev) ev.userInfo.textColor.0;
+      };
       text = switch preElm { case (#text(t)) { t } };
     };
     st.bwd := Seq.pushBack(st.bwd, st.levels.next(), textElm)

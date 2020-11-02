@@ -34,6 +34,7 @@ use std::io;
 use std::sync::mpsc;
 use std::time::Duration;
 use tokio::task;
+use chrono::prelude::*;
 
 /// Internet Computer Game Terminal (ic-gt)
 #[derive(StructOpt, Debug, Clone)]
@@ -94,9 +95,9 @@ pub type InitArgs = (String, (Nat, Nat, Nat));
 pub enum ServerCall {
     Init(InitArgs),
     // Query a projected view of the remote canister
-    View(render::Dim, Vec<event::Event>),
+    View(render::Dim, Vec<event::EventInfo>),
     // Update the state of the remote canister
-    Update(Vec<event::Event>),
+    Update(Vec<event::EventInfo>),
     // To process user request to quit interaction
     FlushQuit,
 }
@@ -457,6 +458,24 @@ pub async fn redraw<T: RenderTarget>(
     Ok(())
 }
 
+// skip events just have meta info, needed for _customized_ (per-user) views.
+// alternatively, the "event" corresponding to getting the current view is the Skip event.
+pub fn skip_event(cfg: &ConnectConfig) -> event::EventInfo {
+    event::EventInfo{
+        user_info: event::UserInfo{
+            user_name: cfg.init_args.0.clone(),
+            text_color: (
+                cfg.init_args.1.clone(),
+                (Nat::from(0), Nat::from(0), Nat::from(0))
+            ),
+        },
+        nonce: None,
+        date_time_local: Local::now().to_rfc3339(),
+        date_time_utc: Utc::now().to_rfc3339(),
+        event: event::Event::Skip,
+    }
+}
+
 async fn do_update_task(
     cfg: ConnectConfig,
     remote_in: mpsc::Receiver<ServerCall>,
@@ -533,13 +552,15 @@ async fn event_loop<T: RenderTarget>(
 
     // initial draw (not really a "redraw" yet):
     {
-        let rr = server_call(&cfg, ServerCall::View(window_dim.clone(), vec![])).await?;
+        let rr = server_call(&cfg, ServerCall::View(window_dim.clone(),
+                                                    vec![skip_event(&cfg)])).await?;
         redraw(canvas, &window_dim, &rr.unwrap()).await?;
     };
 
     // main loop
     'running: loop {
         if let Some(system_event) = event_pump.wait_event_timeout(13) {
+            // utc/local timestamps for event
             let event = translate_system_event(&system_event);
             let event = match event {
                 None => continue 'running,
@@ -551,6 +572,9 @@ async fn event_loop<T: RenderTarget>(
                 event::Event::MouseDown(_) => {
                     // ignore (for now)
                 }
+                event::Event::Skip => {
+                    // ignore
+                },
                 event::Event::Quit => {
                     debug!("Quit");
                     println!("Begin: Quitting...");
@@ -562,6 +586,7 @@ async fn event_loop<T: RenderTarget>(
                     window_dim = new_dim;
                     let mut buffer = u_key_infos.clone();
                     buffer.append(&mut (q_key_infos.clone()));
+                    buffer.push(skip_event(&cfg));
                     let rr =
                         server_call(&cfg, ServerCall::View(window_dim.clone(), buffer.clone()))
                             .await?;
@@ -569,7 +594,19 @@ async fn event_loop<T: RenderTarget>(
                 }
                 event::Event::KeyDown(ref keys) => {
                     debug!("KeyDown {:?}", keys);
-                    q_key_infos.push(event::Event::KeyDown(keys.clone()));
+                    q_key_infos.push(event::EventInfo{
+                        user_info: event::UserInfo{
+                            user_name: cfg.init_args.0.clone(),
+                            text_color: (
+                                cfg.init_args.1.clone(),
+                                (Nat::from(0), Nat::from(0), Nat::from(0))
+                            ),
+                        },
+                        nonce: None,
+                        date_time_local: Local::now().to_rfc3339(),
+                        date_time_utc: Utc::now().to_rfc3339(),
+                        event: event::Event::KeyDown(keys.clone())
+                    });
                     let rr: render::Result = {
                         let mut buffer = u_key_infos.clone();
                         buffer.append(&mut (q_key_infos.clone()));
@@ -608,9 +645,11 @@ async fn event_loop<T: RenderTarget>(
                 u_key_infos = q_key_infos;
                 q_key_infos = vec![];
                 {
+                    let mut buffer = u_key_infos.clone();
+                    buffer.push(skip_event(&cfg));
                     let rr = server_call(
                         &cfg,
-                        ServerCall::View(window_dim.clone(), u_key_infos.clone()),
+                        ServerCall::View(window_dim.clone(), buffer),
                     )
                     .await?;
                     redraw(canvas, &window_dim, &rr.unwrap()).await?;
@@ -791,15 +830,16 @@ fn main() {
             replica_url,
             init_args_text,
         } => {
-            // to do -- FIX ME
-            drop(init_args_text);
+
+            let raw_args: (String, (u8, u8, u8)) = ron::de::from_str(&init_args_text).unwrap();
             let init_args: InitArgs = {
                 (
-                    "Bob (TEMP)".to_string(),
-                    (Nat::from(210), Nat::from(150), Nat::from(220)),
+                    raw_args.0,
+                    (Nat::from(raw_args.1.0),
+                     Nat::from(raw_args.1.1),
+                     Nat::from(raw_args.1.2)),
                 )
             };
-
             let cfg = ConnectConfig {
                 canister_id,
                 replica_url,

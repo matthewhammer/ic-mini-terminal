@@ -109,10 +109,8 @@ module {
       r.begin(#flow(vert));
       r.fill(#open((255, 255, 255), 1));
       {
-        r.begin(#flow(horz));
-        tr.textAtts("TextEdit", taTitleText(0));
-        tr.textAtts("Multi-user text editor (in Motoko, for the IC)", taTitleText(1));
-        r.end();
+        tr.textAtts("IC-EDIT", taTitleText(0));
+        tr.textAtts("a multi-user text editor (in Motoko, for the IC)", taTitleText(1));
       };
       {
         r.begin(#flow(horz));
@@ -134,6 +132,44 @@ module {
         };
         r.end();
       };
+      {
+        func getContentInfo(elm : ?Types.Elm) : (Text, Text, Render.Color) = {
+          switch elm {
+          case null ("none", "no one", (0, 0, 0));
+          case (?(#text(te))) { (te.lastModifyTime, te.lastModifyUser, te.color) };
+          }
+        };
+        let ((timeBefore, userBefore, colorBefore),
+             (timeAfter, userAfter, colorAfter)) = (
+          getContentInfo(Seq.peekBack(st.bwd)),
+          getContentInfo(Seq.peekFront(st.fwd)),
+        );
+        {
+          r.begin(#flow(vert));
+          tr.textAtts("Meta info: ", taTitleText(2));
+          {
+            r.begin(#flow(horz));
+            tr.textAtts("* back: ", taTitleText(2));
+            tr.textAtts(timeBefore, taTitleText(2));
+            tr.textAtts(" by ", taTitleText(2));
+            tr.textAtts(userBefore, taTitleText(2));
+            r.rect({pos={x=0; y=0}; dim={width=10; height=10}},
+                   #closed(colorBefore));
+            r.end();
+          };
+          {
+            r.begin(#flow(horz));
+            tr.textAtts("* forw: ", taTitleText(2));
+            tr.textAtts(timeAfter, taTitleText(2));
+            tr.textAtts(" by ", taTitleText(2));
+            tr.textAtts(userAfter, taTitleText(2));
+            r.rect({pos={x=0; y=0}; dim={width=10; height=10}},
+                   #closed(colorAfter));
+            r.end();
+          };
+          r.end();
+        };
+      };
       r.end();
     };
     func isNewline(elm : Types.Elm) : Bool = {
@@ -141,6 +177,7 @@ module {
         case (#text(te)) { te.text == "\n" };
       }
     };
+
     let (linesBefore, linesAfter) = (
       Seq.tokens(st.bwd, isNewline, st.levels),
       Seq.tokens(st.fwd, isNewline, st.levels),

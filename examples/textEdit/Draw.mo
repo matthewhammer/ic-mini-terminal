@@ -47,53 +47,46 @@ module {
       bgFill=bg;
     };
 
-  func attsLegendFg(fg:Render.Fill) : Atts =
-    {
-      zoom=2;
-      fgFill=fg;
-      bgFill=#closed((0, 0, 0));
-    };
-
-  func attsLegendTextLo() : Atts =
-    attsLegendFg(#closed((180, 140, 190)));
-
-  func attsLegendTextHi() : Atts =
-    attsLegendFg(#closed((220, 200, 240)));
-
   func taTitleText(lineNo : Nat) : Atts =
     switch lineNo {
     case 0 {
            zoom=4;
-           fgFill=#closed((60, 255, 100));
-           bgFill=#closed((60, 0, 60));
+           fgFill=#closed((255, 255, 255));
+           bgFill=#closed((0, 0, 0));
          };
     case 1 {
            zoom=2;
-           fgFill=#closed((160, 255, 200));
+           fgFill=#closed((220, 220, 220));
            bgFill=#closed((0, 0, 0));
          };
     case 2 {
            zoom=2;
-           fgFill=#closed((60, 255, 100));
-           bgFill=#closed((60, 0, 60));
+           fgFill=#closed((150, 150, 150));
+           bgFill=#closed((0, 0, 0));
          };
     case _ {
            zoom=3;
            fgFill=#closed((255, 255, 255));
-           bgFill=#closed((60, 0, 60));
+           bgFill=#closed((0, 0, 0));
          };
   };
+
+  func textAtts(fg : Render.Color) : Atts =
+    attsFgBg(#closed(fg), #closed((0, 0, 0)));
 
   func userTextAtts(st : State) : Atts =
     attsFgBg(#closed(st.init.userTextColor), #closed((0, 0, 0)));
 
-  func cursorAtts() : Atts =
-    attsFgBg(#closed((200, 250, 200)), #closed((0, 0, 0)));
-
-  // Fill / Atts names --------------------------------------------------------
-
-  func bgFill() : Render.Fill = #closed((50, 10, 50));
-  func bgFillHi() : Render.Fill = #closed((150, 100, 150));
+  func cursorAtts(st : State) : Atts {
+    switch (st.currentEvent) {
+    case null {
+           attsFgBg(#closed((255, 255, 255)), #closed((0, 0, 0)));
+         };
+    case (?ev) {
+           attsFgBg(#closed(ev.userInfo.textColor.0), #closed((0, 0, 0)));
+         };
+    }
+  };
 
   // --------------------------------------------------------
 
@@ -121,10 +114,24 @@ module {
         tr.textAtts("Multi-user text editor (in Motoko, for the IC)", taTitleText(1));
         r.end();
       };
-      { 
+      {
         r.begin(#flow(horz));
-        tr.textAtts("Username: ", taTitleText(2));
-        tr.textAtts(st.init.userName, taTitleText(3));
+        tr.textAtts("User ", taTitleText(2));
+        switch (st.currentEvent) {
+          case null tr.textAtts(st.init.userName, taTitleText(3));
+          case (?ev) {
+                 tr.textAtts(ev.userInfo.userName, taTitleText(3));
+               };
+        };
+        switch (st.currentEvent) {
+          case null { };
+          case (?ev) {
+                 tr.textAtts(" as ", taTitleText(2));
+                 // draw a rectangle with their text color, a la Etherpad UI.
+                 r.rect({pos={x=0; y=0}; dim={width=15; height=15}},
+                        #closed(ev.userInfo.textColor.0));
+               };
+        };
         r.end();
       };
       r.end();
@@ -147,7 +154,7 @@ module {
         for (elm in Seq.iter(line, #fwd)) {
           switch elm {
           case (#text(te)) {
-                 tr.textAtts(te.text, userTextAtts(st));
+                 tr.textAtts(te.text, textAtts(te.color));
                };
           };
         };
@@ -162,12 +169,12 @@ module {
            };
       case _ { };
       };
-      tr.textAtts("*", cursorAtts());
+      tr.textAtts("*", cursorAtts(st));
       for (line in Seq.iter(linesAfter, #fwd)) {
         for (elm in Seq.iter(line, #fwd)) {
           switch elm {
           case (#text(te)) {
-                 tr.textAtts(te.text, userTextAtts(st));
+                 tr.textAtts(te.text, textAtts(te.color));
                };
           };
         };

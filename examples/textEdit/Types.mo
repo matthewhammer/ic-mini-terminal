@@ -23,6 +23,8 @@ public type Elm = {
 };
 
 public type TextElm = {
+  lastModifyUser: Text;
+  lastModifyTime: Text; // use [ISO8601](https://tools.ietf.org/html/rfc3339)
   color : Render.Color;
   text : Text;
   //time : Nat; -- to do, later.
@@ -40,11 +42,12 @@ public type State = {
   levels : Levels;
   var init : Init;
   var fwd : Content;
-  var bwd : Content;
+  var bwd : Content;  
+  var currentEvent : ?RedrawTypes.Event.EventInfo;
 };
 
 // input events (from local terminal to remote service)
-public type Event = RedrawTypes.Event.Event;
+public type EventInfo = RedrawTypes.Event.EventInfo;
 public type KeyInfo = RedrawTypes.Event.KeyInfo;
 
 // graphical output (from remote service to local terminal)

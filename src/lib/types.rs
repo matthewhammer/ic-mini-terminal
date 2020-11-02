@@ -39,10 +39,31 @@ pub mod lang {
 ///
 /// Information from Rust event loop (via SDL2) to Motoko canister logic.
 pub mod event {
-    use candid::{CandidType, Deserialize};
+    use candid::{CandidType, Deserialize, Nat};
 
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
+    pub struct UserInfo {
+        #[serde(rename(serialize = "userName"))]
+        pub user_name: String,
+        #[serde(rename(serialize = "textColor"))]
+        pub text_color: ((Nat, Nat, Nat), (Nat, Nat, Nat))
+    }
+
+    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
+    pub struct EventInfo {
+        #[serde(rename(serialize = "userInfo"))]
+        pub user_info: UserInfo,
+        pub nonce: Option<Nat>,
+        #[serde(rename(serialize = "dateTimeUtc"))]
+        pub date_time_utc: String,
+        #[serde(rename(serialize = "dateTimeLocal"))]
+        pub date_time_local: String,
+        pub event: Event,
+    }
+    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Event {
+        #[serde(rename(serialize = "skip"))]
+        Skip,
         #[serde(rename(serialize = "quit"))]
         Quit,
         #[serde(rename(serialize = "keyDown"))]

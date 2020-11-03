@@ -72,8 +72,8 @@ enum CliCommand {
         replica_url: String,
         canister_id: String,
         /// Initialization arguments, as a Candid textual value (default is empty tuple).
-        #[structopt(short = "i", long = "init")]
-        init_args_text: String,
+        #[structopt(short = "i", long = "user")]
+        user_info_text: String,
     },
 }
 
@@ -84,16 +84,15 @@ pub struct ConnectConfig {
     canister_id: String,
     replica_url: String,
     /// temp hack: username and user-chosen color
-    init_args: InitArgs,
+    user_info: UserInfo,
 }
 
 /// temp hack: username and user-chosen color
-pub type InitArgs = (String, (Nat, Nat, Nat));
+pub type UserInfo = (String, (Nat, Nat, Nat));
 
 /// Messages that go from this terminal binary to the server cansiter
 #[derive(Debug, Clone)]
 pub enum ServerCall {
-    Init(InitArgs),
     // Query a projected view of the remote canister
     View(render::Dim, Vec<event::EventInfo>),
     // Update the state of the remote canister
@@ -463,9 +462,9 @@ pub async fn redraw<T: RenderTarget>(
 pub fn skip_event(cfg: &ConnectConfig) -> event::EventInfo {
     event::EventInfo{
         user_info: event::UserInfo{
-            user_name: cfg.init_args.0.clone(),
+            user_name: cfg.user_info.0.clone(),
             text_color: (
-                cfg.init_args.1.clone(),
+                cfg.user_info.1.clone(),
                 (Nat::from(0), Nat::from(0), Nat::from(0))
             ),
         },
@@ -530,7 +529,7 @@ async fn event_loop<T: RenderTarget>(
     // (Consumes remote_in and produces remote_out).
 
     task::spawn(do_update_task(cfg2, remote_in, remote_out));
-    local_out.send(ServerCall::Init(cfg.init_args.clone()))?;
+    local_out.send(ServerCall::Update(vec![skip_event(&cfg)]))?;
 
     let mut quit_request = false;
 
@@ -596,9 +595,9 @@ async fn event_loop<T: RenderTarget>(
                     debug!("KeyDown {:?}", keys);
                     q_key_infos.push(event::EventInfo{
                         user_info: event::UserInfo{
-                            user_name: cfg.init_args.0.clone(),
+                            user_name: cfg.user_info.0.clone(),
                             text_color: (
-                                cfg.init_args.1.clone(),
+                                cfg.user_info.1.clone(),
                                 (Nat::from(0), Nat::from(0), Nat::from(0))
                             ),
                         },
@@ -727,7 +726,6 @@ pub async fn server_call(
     let timestamp = std::time::SystemTime::now();
     info!("server_call: {:?}", call);
     let arg_bytes = match call.clone() {
-        ServerCall::Init(args) => candid::encode_args(args).unwrap(),
         ServerCall::FlushQuit => candid::encode_args(()).unwrap(),
         ServerCall::View(window_dim, evs) => candid::encode_args((window_dim, evs)).unwrap(),
         ServerCall::Update(evs) => candid::encode_args((evs,)).unwrap(),
@@ -740,14 +738,6 @@ pub async fn server_call(
     // do an update or query call, based on the ServerCall case:
     let blob_res = match call.clone() {
         ServerCall::FlushQuit => None,
-        ServerCall::Init(_) => {
-            let resp = agent
-                .update(&canister_id, "init")
-                .with_arg(arg_bytes)
-                .call_and_wait(delay)
-                .await?;
-            Some(resp)
-        }
         ServerCall::View(_window_dim, _keys) => {
             let resp = agent
                 .query(&canister_id, "view")
@@ -774,7 +764,6 @@ pub async fn server_call(
         );
         match call.clone() {
             ServerCall::FlushQuit => Ok(None),
-            ServerCall::Init(_) => Ok(None),
             ServerCall::Update(_) => Ok(None),
             ServerCall::View(_, _) => match candid::Decode!(&(*blob_res), render::Result) {
                 Ok(res) => {
@@ -828,11 +817,11 @@ fn main() {
         CliCommand::Connect {
             canister_id,
             replica_url,
-            init_args_text,
+            user_info_text,
         } => {
 
-            let raw_args: (String, (u8, u8, u8)) = ron::de::from_str(&init_args_text).unwrap();
-            let init_args: InitArgs = {
+            let raw_args: (String, (u8, u8, u8)) = ron::de::from_str(&user_info_text).unwrap();
+            let user_info: UserInfo = {
                 (
                     raw_args.0,
                     (Nat::from(raw_args.1.0),
@@ -844,7 +833,7 @@ fn main() {
                 canister_id,
                 replica_url,
                 cli_opt,
-                init_args,
+                user_info,
             };
             info!("Connecting to IC canister: {:?}", cfg);
             runtime.block_on(start_event_loop(cfg)).ok();

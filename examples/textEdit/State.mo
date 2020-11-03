@@ -1,6 +1,7 @@
 import Types "Types";
 
 import List "mo:base/List";
+import Buffer "mo:base/Buffer";
 import Result "mo:base/Result";
 
 import Render "mo:redraw/Render";
@@ -11,13 +12,6 @@ import Seq "mo:sequence/Sequence";
 
 module {
   type State = Types.State;
-
-  public func init(st : State, userName_ : Text, userTextColor_ : Render.Color) {
-    st.init := {
-      userName = userName_ ;
-      userTextColor = userTextColor_ ;
-    };
-  };
 
   public func keyDown(st:State, key:Types.KeyInfo) {
     switch (key.key) {
@@ -147,22 +141,21 @@ module {
 
   public func initState() : Types.State {
      {
-       var currentEvent = (null : ?Types.EventInfo);
-       var init = {
-         userName = "";
-         userTextColor = (255, 255, 255)
-       };
        levels = Stream.Bernoulli.seedFrom(0);
+       commitLog = Buffer.Buffer<Types.EventInfo>(0);
        var bwd = Seq.empty<Types.Elm>();
        var fwd = Seq.empty<Types.Elm>();
+       var viewEvents = ([] : [Types.EventInfo]);
+       var currentEvent = (null : ?Types.EventInfo);
      }
   };
 
   public func clone(st : State) : State {
     {
-      var currentEvent = st.currentEvent;
-      var init = st.init;
       levels = st.levels;
+      commitLog = st.commitLog;
+      var viewEvents = st.viewEvents;
+      var currentEvent = st.currentEvent;
       var fwd = st.fwd;
       var bwd = st.bwd;
     }
@@ -253,7 +246,7 @@ module {
         case (?ev) ev.userInfo.userName;
       };
       color = switch (st.currentEvent) {
-        case null st.init.userTextColor;
+        case null (255, 100, 100); // "bright red"
         case (?ev) ev.userInfo.textColor.0;
       };
       text = switch preElm { case (#text(t)) { t } };

@@ -578,7 +578,7 @@ async fn event_loop<T: RenderTarget>(
                 event::Event::Quit => {
                     debug!("Quit");
                     println!("Begin: Quitting...");
-                    println!("Waiting for next update response...");
+                    println!(" (begin waiting for pending update-response confirmation(s))");
                     quit_request = true;
                 }
                 event::Event::WindowSize(new_dim) => {

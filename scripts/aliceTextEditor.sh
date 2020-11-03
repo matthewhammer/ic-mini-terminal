@@ -1,8 +1,7 @@
 #!/bin/bash
 VERSION=`cat .DFX_VERSION`
 export PATH=~/.cache/dfinity/versions/$VERSION:`pwd`:$PATH
-dfx stop &&\
-dfx start --background --clean &&\
+echo Deploying text editor for Alice
 dfx canister create textEdit &&\
 dfx build textEdit &&\
 dfx canister install textEdit ||\

@@ -26,11 +26,11 @@ module {
     intraPad=1;
   };
 
-  let textHorz : Render.FlowAtts = {
+  func horzText(zoom : Nat) : Render.FlowAtts { {
     dir=#right;
-    interPad=1;
-    intraPad=1;
-  };
+    interPad=zoom;
+    intraPad=zoom;
+  } };
 
   // Char/Text atts --------------------------------------------------------
 
@@ -74,9 +74,6 @@ module {
   func textAtts(fg : Render.Color) : Atts =
     attsFgBg(#closed(fg), #closed((0, 0, 0)));
 
-  func userTextAtts(st : State) : Atts =
-    attsFgBg(#closed(st.init.userTextColor), #closed((0, 0, 0)));
-
   func cursorAtts(st : State) : Atts {
     switch (st.currentEvent) {
     case null {
@@ -98,7 +95,7 @@ module {
                           zoom = 3;
                           fgFill = #closed((255, 255, 255));
                           bgFill = #closed((0, 0, 0));
-                          flow = horz
+                          flow = horzText(3);
                         });
     let tr = Render.TextRender(cr);
 
@@ -110,13 +107,15 @@ module {
       r.fill(#open((255, 255, 255), 1));
       {
         tr.textAtts("IC-EDIT", taTitleText(0));
-        tr.textAtts("a multi-user text editor (in Motoko, for the IC)", taTitleText(1));
+        tr.textAtts(" a multi-user text editor,", taTitleText(1));
+        tr.textAtts(" via Motoko and the Internet Computer", taTitleText(2));
+        tr.textAtts("-------------------------------------", taTitleText(2));
       };
       {
         r.begin(#flow(horz));
-        tr.textAtts("User ", taTitleText(2));
+        tr.textAtts("User ", taTitleText(3));
         switch (st.currentEvent) {
-          case null tr.textAtts(st.init.userName, taTitleText(3));
+          case null tr.textAtts("?", taTitleText(3));
           case (?ev) {
                  tr.textAtts(ev.userInfo.userName, taTitleText(3));
                };

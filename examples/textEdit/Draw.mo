@@ -137,10 +137,28 @@ module {
       tr.textAtts("Developer view", taTitleText(1));
       {
         r.begin(#flow(vert));
-        tr.textAtts(" Commit log:", taTitleText(2));
+        tr.textAtts(" Commit log:", taTitleText(1));
+        r.begin(#flow(vert));
         for (ev in st.commitLog.vals()) {
           r.elm(drawEvent(ev));
         };
+        r.end();
+        switch (st.currentEvent) {
+          case null { };
+          case (?ev) {
+                 r.begin(#flow(horz));
+                 tr.textAtts(" View for ", taTitleText(1));
+                 tr.textAtts(ev.userInfo.userName, taTitleText(1));
+                 r.rect({pos={x=0; y=0}; dim={width=10; height=10}},
+                        #closed(ev.userInfo.textColor.0));
+                 r.end()
+               }
+        };
+        r.begin(#flow(vert));
+        for (ev in st.viewEvents.vals()) {
+          r.elm(drawEvent(ev));
+        };
+        r.end();
         r.end();
       };
     };

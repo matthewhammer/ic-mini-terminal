@@ -1,4 +1,5 @@
 import List "mo:base/List";
+import Buffer "mo:base/Buffer";
 import Result "mo:base/Result";
 import Render "mo:redraw/Render";
 
@@ -19,7 +20,7 @@ public type Dir2D = {
 
 public type Elm = {
   #text : TextElm
-  // more to come, in the future.
+  // to do: per-user cursors (another case here).
 };
 
 public type TextElm = {
@@ -27,22 +28,20 @@ public type TextElm = {
   lastModifyTime: Text; // use [ISO8601](https://tools.ietf.org/html/rfc3339)
   color : Render.Color;
   text : Text;
-  //time : Nat; -- to do, later.
 };
 
 public type Levels = Seq.Stream<Stream.Bernoulli.Value>;
 public type Content = Seq.Sequence<Elm>;
 
-public type Init = {
-  userName : Text;
-  userTextColor : Render.Color;
-};
-
 public type State = {
   levels : Levels;
-  var init : Init;
+
+  commitLog : Buffer.Buffer<EventInfo>;
+
   var fwd : Content;
-  var bwd : Content;  
+  var bwd : Content;
+
+  var viewEvents : [EventInfo];
   var currentEvent : ?RedrawTypes.Event.EventInfo;
 };
 

@@ -85,8 +85,70 @@ module {
     }
   };
 
-  // --------------------------------------------------------
+  public func drawEvent(ev : Types.EventInfo) : Render.Elm {
+    let r = Render.Render();
+    let cr = Render.CharRender(r, Mono5x5.bitmapOfChar,
+                               {
+                                 zoom = 1;
+                                 fgFill = #closed((255, 255, 255));
+                                 bgFill = #closed((0, 0, 0));
+                                 flow = horzText(1);
+                               });
+    let tr = Render.TextRender(cr);
+    r.begin(#flow(vert));
+    r.fill(#open((100, 100, 100), 1));
+    r.begin(#flow(horz));
+    tr.textAtts(ev.dateTimeUtc # " ", taTitleText(2));
+    tr.textAtts(ev.userInfo.userName, taTitleText(2));
+    r.rect({pos={x=0; y=0}; dim={width=10; height=10}},
+           #closed(ev.userInfo.textColor.0));
+    r.rect({pos={x=0; y=0}; dim={width=10; height=10}}, #none);
+    switch (ev.event) {
+    case (#quit) tr.textAtts("quit", taTitleText(1));
+    case (#skip) tr.textAtts("skip", taTitleText(1));
+    case (#mouseDown(pos)) tr.textAtts("mouseDown(...)", taTitleText(1));
+    case (#keyDown(ks)) {
+           tr.textAtts("keyDown ", taTitleText(1));
+           for (k in ks.vals()) {
+             tr.textAtts(k.key # " ", taTitleText(2));
+           };
+         };
+    case x { tr.textAtts("??? to do.", taTitleText(1)) };
+    };
+    r.end();
+    r.end();
+    r.getElm()
+  };
 
+  /// --------------------------------------------------------------------
+  public func drawCommitLog(st : State) : Render.Elm {
+    let r = Render.Render();
+    let cr = Render.CharRender(r, Mono5x5.bitmapOfChar,
+                        {
+                          zoom = 1;
+                          fgFill = #closed((255, 255, 255));
+                          bgFill = #closed((0, 0, 0));
+                          flow = horzText(1);
+                        });
+    let tr = Render.TextRender(cr);
+    r.begin(#flow(vert));
+    r.fill(#open((255, 255, 0), 1));
+    {
+      tr.textAtts("Developer view", taTitleText(1));
+      {
+        r.begin(#flow(vert));
+        tr.textAtts(" Commit log:", taTitleText(2));
+        for (ev in st.commitLog.vals()) {
+          r.elm(drawEvent(ev));
+        };
+        r.end();
+      };
+    };
+    r.end();
+    r.getElm()
+  };
+
+  /// --------------------------------------------------------------------
   public func drawState(st : State, windowDim : Render.Dim) : Render.Elm {
 
     let r = Render.Render();
@@ -99,7 +161,8 @@ module {
                         });
     let tr = Render.TextRender(cr);
 
-    r.begin(#flow(vert)); // Display begin
+    r.begin(#flow(horz));  // Outer Display begin
+    r.begin(#flow(vert));  // Inner Display begin
     r.fill(#open((255, 255, 0), 1));
 
     {
@@ -220,7 +283,11 @@ module {
       r.end();
     };
     r.end(); // Vertical end
-    r.end(); // Display end
+    r.end(); // Inner Display end
+
+    r.elm(drawCommitLog(st)); // Commit log, for developers.
+
+    r.end(); // Outer Display end
     r.getElm()
   };
 

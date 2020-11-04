@@ -10,12 +10,13 @@ actor {
 
   flexible var state = State.initState();
 
-  public func init(userName : Text, userTextColor : Render.Color) {
-    State.init(state, userName, userTextColor)
-  };
-
+  /// attempt to "commit" a block of local events to the state's commitLog
   public func update(events : [Types.EventInfo]) {
-    State.update(state, events)
+    State.update(state, events);
+    // commit to log
+    for (ev in events.vals()) {
+      state.commitLog.add(ev);
+    };
   };
 
   public query func view(
@@ -24,6 +25,7 @@ actor {
     : async Types.Graphics
   {
     let temp = State.clone(state);
+    temp.viewEvents := events;
     State.update(temp, events);
     redrawScreen(windowDim, temp)
   };

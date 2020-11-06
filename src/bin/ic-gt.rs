@@ -77,9 +77,16 @@ enum CliCommand {
     },
 }
 
+/// Connection context: IC agent object, for server calls, and configuration info.
+pub struct ConnectCtx {
+    cfg: ConnectCfg,
+    agent: Agent,
+    canister_id: Principal,
+}
+
 /// Connection configuration
 #[derive(Debug, Clone)]
-pub struct ConnectConfig {
+pub struct ConnectCfg {
     cli_opt: CliOpt,
     canister_id: String,
     replica_url: String,
@@ -158,7 +165,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub type IcgtResult<X> = Result<X, IcgtError>;
 
-pub fn agent(url: &str) -> IcgtResult<Agent> {
+pub fn create_agent(url: &str) -> IcgtResult<Agent> {
     //use ring::signature::Ed25519KeyPair;
     use ic_agent::agent::AgentConfig;
     use ring::rand::SystemRandom;
@@ -435,12 +442,12 @@ pub async fn redraw<T: RenderTarget>(
 
 // skip events just have meta info, needed for _customized_ (per-user) views.
 // alternatively, the "event" corresponding to getting the current view is the Skip event.
-pub fn skip_event(cfg: &ConnectConfig) -> event::EventInfo {
+pub fn skip_event(ctx: &ConnectCtx) -> event::EventInfo {
     event::EventInfo{
         user_info: event::UserInfo{
-            user_name: cfg.user_info.0.clone(),
+            user_name: ctx.cfg.user_info.0.clone(),
             text_color: (
-                cfg.user_info.1.clone(),
+                ctx.cfg.user_info.1.clone(),
                 (Nat::from(0), Nat::from(0), Nat::from(0))
             ),
         },
@@ -452,29 +459,37 @@ pub fn skip_event(cfg: &ConnectConfig) -> event::EventInfo {
 }
 
 async fn do_update_task(
-    cfg: ConnectConfig,
+    cfg: ConnectCfg,
     remote_in: mpsc::Receiver<ServerCall>,
     remote_out: mpsc::Sender<()>,
 ) -> IcgtResult<()> {
+    /* Create our own agent here since we cannot Send it here from the main thread. */
+    let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
+    let agent = create_agent(&cfg.replica_url)?;
+    let ctx = ConnectCtx {
+        cfg,
+        canister_id,
+        agent,
+    };
     loop {
         let sc = remote_in.recv().unwrap();
         if let ServerCall::FlushQuit = sc {
             return Ok(());
         };
-        server_call(&cfg, sc).await?;
+        server_call(&ctx, sc).await?;
         remote_out.send(()).unwrap();
     }
 }
 
 async fn event_loop<T: RenderTarget>(
-    cfg: ConnectConfig,
+    ctx: ConnectCtx,
     window_dim_: render::Dim,
     sdl: sdl2::Sdl,
     canvas: &mut Canvas<T>,
 ) -> Result<(), IcgtError> {
     info!("SDL canvas.info().name => \"{}\"", canvas.info().name);
 
-    let cfg2 = cfg.clone();
+    let cfg = ctx.cfg.clone();
     let mut window_dim = window_dim_.clone();
 
     let mut q_key_infos = vec![];
@@ -491,8 +506,8 @@ async fn event_loop<T: RenderTarget>(
     // 1. Remote interactions via update calls to server.
     // (Consumes remote_in and produces remote_out).
 
-    task::spawn(do_update_task(cfg2, remote_in, remote_out));
-    local_out.send(ServerCall::Update(vec![skip_event(&cfg)]))?;
+    task::spawn(do_update_task(cfg, remote_in, remote_out));
+    local_out.send(ServerCall::Update(vec![skip_event(&ctx)]))?;
 
     let mut quit_request = false;
 
@@ -514,8 +529,8 @@ async fn event_loop<T: RenderTarget>(
 
     // initial draw (not really a "redraw" yet):
     {
-        let rr = server_call(&cfg, ServerCall::View(window_dim.clone(),
-                                                    vec![skip_event(&cfg)])).await?;
+        let rr = server_call(&ctx, ServerCall::View(window_dim.clone(),
+                                                    vec![skip_event(&ctx)])).await?;
         redraw(canvas, &window_dim, &rr.unwrap()).await?;
     };
 
@@ -548,9 +563,9 @@ async fn event_loop<T: RenderTarget>(
                     window_dim = new_dim;
                     let mut buffer = u_key_infos.clone();
                     buffer.append(&mut (q_key_infos.clone()));
-                    buffer.push(skip_event(&cfg));
+                    buffer.push(skip_event(&ctx));
                     let rr =
-                        server_call(&cfg, ServerCall::View(window_dim.clone(), buffer.clone()))
+                        server_call(&ctx, ServerCall::View(window_dim.clone(), buffer.clone()))
                             .await?;
                     redraw(canvas, &window_dim, &rr.unwrap()).await?;
                 }
@@ -558,9 +573,9 @@ async fn event_loop<T: RenderTarget>(
                     debug!("KeyDown {:?}", keys);
                     q_key_infos.push(event::EventInfo{
                         user_info: event::UserInfo{
-                            user_name: cfg.user_info.0.clone(),
+                            user_name: ctx.cfg.user_info.0.clone(),
                             text_color: (
-                                cfg.user_info.1.clone(),
+                                ctx.cfg.user_info.1.clone(),
                                 (Nat::from(0), Nat::from(0), Nat::from(0))
                             ),
                         },
@@ -574,7 +589,7 @@ async fn event_loop<T: RenderTarget>(
                             let mut buffer = u_key_infos.clone();
                             buffer.append(&mut (q_key_infos.clone()));
                             let rr =
-                                server_call(&cfg, ServerCall::View(window_dim.clone(), buffer.clone()))
+                                server_call(&ctx, ServerCall::View(window_dim.clone(), buffer.clone()))
                                 .await?;
                             rr.unwrap()
                         };
@@ -610,9 +625,9 @@ async fn event_loop<T: RenderTarget>(
                 q_key_infos = vec![];
                 {
                     let mut buffer = u_key_infos.clone();
-                    buffer.push(skip_event(&cfg));
+                    buffer.push(skip_event(&ctx));
                     let rr = server_call(
-                        &cfg,
+                        &ctx,
                         ServerCall::View(window_dim.clone(), buffer),
                     )
                     .await?;
@@ -626,21 +641,21 @@ async fn event_loop<T: RenderTarget>(
     }
 }
 
-async fn start_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
+async fn start_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
     let window_dim = render::Dim {
         width: Nat::from(1000),
         height: Nat::from(666),
     };
     let sdl = sdl2::init()?;
 
-    if cfg.cli_opt.no_window {
+    if ctx.cfg.cli_opt.no_window {
         let surface = sdl2::surface::Surface::new(
             nat_ceil(&window_dim.width),
             nat_ceil(&window_dim.height),
             sdl2::pixels::PixelFormatEnum::RGBA8888,
         )?;
         let mut canvas = surface.into_canvas()?;
-        event_loop(cfg, window_dim, sdl, &mut canvas).await?;
+        event_loop(ctx, window_dim, sdl, &mut canvas).await?;
     } else {
         let video_subsystem = sdl.video()?;
         let window = video_subsystem
@@ -664,7 +679,7 @@ async fn start_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
             .build()
             .map_err(|e| e.to_string())?;
 
-        event_loop(cfg, window_dim, sdl, &mut canvas).await?;
+        event_loop(ctx, window_dim, sdl, &mut canvas).await?;
     };
     Ok(())
 }
@@ -672,7 +687,7 @@ async fn start_event_loop(cfg: ConnectConfig) -> Result<(), IcgtError> {
 // to do -- fix hack; refactor to remove Option<_> in return type
 
 pub async fn server_call(
-    cfg: &ConnectConfig,
+    ctx: &ConnectCtx,
     call: ServerCall,
 ) -> IcgtResult<Option<render::Result>> {
     if let ServerCall::FlushQuit = call {
@@ -680,11 +695,8 @@ pub async fn server_call(
     };
     debug!(
         "server_call: to canister_id {:?} at replica_url {:?}",
-        cfg.canister_id, cfg.replica_url
+        ctx.cfg.canister_id, ctx.cfg.replica_url
     );
-    let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
-    /* to do -- make one agent and save it in a new structure, ConnectCtx, which holds a copy of the ConnectConfig we have here. */
-    let agent = agent(&cfg.replica_url)?;
     let delay = Delay::builder()
         .throttle(RETRY_PAUSE)
         .timeout(REQUEST_TIMEOUT)
@@ -705,16 +717,16 @@ pub async fn server_call(
     let blob_res = match call.clone() {
         ServerCall::FlushQuit => None,
         ServerCall::View(_window_dim, _keys) => {
-            let resp = agent
-                .query(&canister_id, "view")
+            let resp = ctx.agent
+                .query(&ctx.canister_id, "view")
                 .with_arg(arg_bytes)
                 .call()
                 .await?;
             Some(resp)
         }
         ServerCall::Update(_keys) => {
-            let resp = agent
-                .update(&canister_id, "update")
+            let resp = ctx.agent
+                .update(&ctx.canister_id, "update")
                 .with_arg(arg_bytes)
                 .call_and_wait(delay)
                 .await?;
@@ -733,7 +745,7 @@ pub async fn server_call(
             ServerCall::Update(_) => Ok(None),
             ServerCall::View(_, _) => match candid::Decode!(&(*blob_res), render::Result) {
                 Ok(res) => {
-                    if cfg.cli_opt.log_trace {
+                    if ctx.cfg.cli_opt.log_trace {
                         let mut res_log = format!("{:?}", &res);
                         if res_log.len() > 1000 {
                             res_log.truncate(1000);
@@ -759,7 +771,7 @@ pub async fn server_call(
     }
 }
 
-fn main() {
+fn main() -> IcgtResult<()> {
     use tokio::runtime::Runtime;
     let mut runtime = Runtime::new().expect("Unable to create a runtime");
 
@@ -795,14 +807,22 @@ fn main() {
                      Nat::from(raw_args.1.2)),
                 )
             };
-            let cfg = ConnectConfig {
+            let cfg = ConnectCfg {
                 canister_id,
                 replica_url,
                 cli_opt,
                 user_info,
             };
-            info!("Connecting to IC canister: {:?}", cfg);
-            runtime.block_on(start_event_loop(cfg)).ok();
+            let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
+            let agent = create_agent(&cfg.replica_url)?;
+            let ctx = ConnectCtx {
+                cfg,
+                canister_id,
+                agent,
+            };
+            info!("Connecting to IC canister: {:?}", ctx.cfg);
+            runtime.block_on(start_event_loop(ctx)).ok();
         }
-    }
+    };
+    Ok(())
 }

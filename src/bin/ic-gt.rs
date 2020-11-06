@@ -461,7 +461,7 @@ async fn do_update_task(
         if let ServerCall::FlushQuit = sc {
             return Ok(());
         };
-        let rr = server_call(&cfg, sc).await?;
+        server_call(&cfg, sc).await?;
         remote_out.send(()).unwrap();
     }
 }

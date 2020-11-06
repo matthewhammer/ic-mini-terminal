@@ -366,6 +366,7 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
                 Keycode::Underscore => "_".to_string(),
                 Keycode::Exclaim => "!".to_string(),
                 Keycode::Hash => "#".to_string(),
+                Keycode::Backquote => (if shift { "~" } else { "`" }).to_string(),
                 Keycode::Quote => (if shift { "\"" } else { "'" }).to_string(),
                 Keycode::Quotedbl => "\"".to_string(),
                 Keycode::LeftBracket => (if shift { "{" } else { "[" }).to_string(),
@@ -373,17 +374,6 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
 
                 /* More to consider later (among many more that are available, but we will ignore)
                 Escape
-                Dollar
-                Percent
-                Ampersand
-                LeftParen
-                RightParen
-                Asterisk
-                Plus
-                Minus
-                Equals
-                Caret
-                Backquote
                 CapsLock
                 F1
                 F2

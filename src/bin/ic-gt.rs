@@ -304,6 +304,8 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
         } => {
             let shift = keymod.contains(sdl2::keyboard::Mod::LSHIFTMOD)
                 || keymod.contains(sdl2::keyboard::Mod::RSHIFTMOD);
+            /* Note: The analysis below encodes my US Mac Book Pro keyboard, almost completely. */
+            /* Longer-term, we need a more complex design to handle other mappings and corresponding keyboard variations. */
             let key = match &kc {
                 Keycode::Tab => "Tab".to_string(),
                 Keycode::Space => " ".to_string(),

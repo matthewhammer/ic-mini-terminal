@@ -375,29 +375,11 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
                 Keycode::LeftBracket => (if shift { "{" } else { "[" }).to_string(),
                 Keycode::RightBracket => (if shift { "}" } else { "]" }).to_string(),
 
-                /* More to consider later (among many more that are available, but we will ignore)
-                Escape
-                CapsLock
-                F1
-                F2
-                F3
-                F4
-                F5
-                F6
-                F7
-                F8
-                F9
-                F10
-                F11
-                F12
-                LCtrl
-                LShift
-                LAlt
-                LGui
-                RCtrl
-                RShift
-                RAlt
-                RGui
+                /* More to consider later (but can we capture these in a browser?):
+                Escape --- (Already caught, to quit.)
+                CapsLock --- Remapped to Control, for me at least.
+                F1--F12 --- Non-standard, but useful for experts' customization macros?
+                Modifiers (??): LCtrl, LShift, LAlt, LGui, RCtrl, RShift, RAlt, RGui
                 */
                 keycode => {
                     info!("Unrecognized key code, ignoring event: {:?}", keycode);

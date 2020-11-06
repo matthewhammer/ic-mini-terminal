@@ -44,15 +44,15 @@ pub struct CliOpt {
     /// Filesystem-based graphics output only.
     #[structopt(short = "W", long = "no-window")]
     no_window: bool,
-    /// Enable tracing -- the most verbose log.
+    /// Trace-level logging (most verbose)
     #[structopt(short = "t", long = "trace-log")]
     log_trace: bool,
-    /// Enable logging for debugging.
+    /// Debug-level logging (medium verbose)
     #[structopt(short = "d", long = "debug-log")]
     log_debug: bool,
-    /// Disable most logging, if not explicitly enabled.
-    #[structopt(short = "q", long = "quiet-log")]
-    log_quiet: bool,
+    /// Coarse logging information (not verbose)
+    #[structopt(short = "L", long = "log")]
+    log_info: bool,
     #[structopt(subcommand)]
     command: CliCommand,
 }
@@ -456,26 +456,13 @@ async fn do_update_task(
     remote_in: mpsc::Receiver<ServerCall>,
     remote_out: mpsc::Sender<()>,
 ) -> IcgtResult<()> {
-    println!("Update task: Begin.");
-    println!("Update task: Pausing (for empty, initial update's response from server).");
-    //server_call(&cfg, ServerCall::Update(vec![])).await?;
-    //remote_out.send(()).unwrap();
     loop {
-        println!("Update task: Loop head: Waiting for next ServerCall request");
         let sc = remote_in.recv().unwrap();
-        println!(
-            "Update task: Request for ServerCall:\n{:?}
-",
-            sc
-        );
         if let ServerCall::FlushQuit = sc {
             return Ok(());
         };
         let rr = server_call(&cfg, sc).await?;
-        println!("Update task: Response for ServerCall:\n{:?}", rr);
-        println!("Update task: Waiting to draw.");
         remote_out.send(()).unwrap();
-        println!("Update task: Loop body done. Looping.");
     }
 }
 
@@ -778,11 +765,11 @@ fn main() {
 
     let cli_opt = CliOpt::from_args();
     init_log(
-        match (cli_opt.log_trace, cli_opt.log_debug, cli_opt.log_quiet) {
+        match (cli_opt.log_trace, cli_opt.log_debug, cli_opt.log_info) {
             (true, _, _) => log::LevelFilter::Trace,
             (_, true, _) => log::LevelFilter::Debug,
-            (_, _, true) => log::LevelFilter::Error,
-            (_, _, _) => log::LevelFilter::Info,
+            (_, _, true) => log::LevelFilter::Info,
+            (_, _, _) => log::LevelFilter::Warn,
         },
     );
     info!("Evaluating CLI command: {:?} ...", &cli_opt.command);

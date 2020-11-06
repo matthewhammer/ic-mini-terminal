@@ -606,15 +606,17 @@ async fn event_loop<T: RenderTarget>(
                         date_time_utc: Utc::now().to_rfc3339(),
                         event: event::Event::KeyDown(keys.clone())
                     });
-                    let rr: render::Result = {
-                        let mut buffer = u_key_infos.clone();
-                        buffer.append(&mut (q_key_infos.clone()));
-                        let rr =
-                            server_call(&cfg, ServerCall::View(window_dim.clone(), buffer.clone()))
+                    /* to do -- move downward, after collecting all waiting events */ {
+                        let rr: render::Result = {
+                            let mut buffer = u_key_infos.clone();
+                            buffer.append(&mut (q_key_infos.clone()));
+                            let rr =
+                                server_call(&cfg, ServerCall::View(window_dim.clone(), buffer.clone()))
                                 .await?;
-                        rr.unwrap()
-                    };
-                    redraw(canvas, &window_dim, &rr).await?;
+                            rr.unwrap()
+                        };
+                        redraw(canvas, &window_dim, &rr).await?;
+                    }
                 }
             }
         };
@@ -717,7 +719,8 @@ pub async fn server_call(
         "server_call: to canister_id {:?} at replica_url {:?}",
         cfg.canister_id, cfg.replica_url
     );
-    let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap(); // xxx
+    let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
+    /* to do -- make one agent and save it in a new structure, ConnectCtx, which holds a copy of the ConnectConfig we have here. */
     let agent = agent(&cfg.replica_url)?;
     let delay = Delay::builder()
         .throttle(RETRY_PAUSE)

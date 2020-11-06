@@ -349,6 +349,7 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
                 Keycode::W => (if shift { "W" } else { "w" }).to_string(),
                 Keycode::X => (if shift { "X" } else { "x" }).to_string(),
                 Keycode::Y => (if shift { "Y" } else { "y" }).to_string(),
+                Keycode::Z => (if shift { "Z" } else { "z" }).to_string(),
                 Keycode::Equals => (if shift { "+" } else { "=" }).to_string(),
                 Keycode::Plus => "+".to_string(),
                 Keycode::Slash => (if shift { "?" } else { "/" }).to_string(),
@@ -412,7 +413,7 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
             };
             let event = event::Event::KeyDown(vec![event::KeyEventInfo {
                 key: key,
-                // to do -- translate modifier keys,
+                /* to do -- include modifier keys' state here */
                 alt: false,
                 ctrl: false,
                 meta: false,

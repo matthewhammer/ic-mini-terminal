@@ -1,3 +1,4 @@
+
 //extern crate hashcons;
 extern crate delay;
 extern crate futures;
@@ -35,6 +36,13 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tokio::task;
 use chrono::prelude::*;
+
+use icgt::{keyboard, types::{
+    event,
+    render::{self, Elm, Fill},
+}};
+use sdl2::render::{Canvas, RenderTarget};
+
 
 /// Internet Computer Game Terminal (ic-gt)
 #[derive(StructOpt, Debug, Clone)]
@@ -153,12 +161,6 @@ fn init_log(level_filter: log::LevelFilter) {
         .write_style(WriteStyle::Always)
         .init();
 }
-
-use icgt::types::{
-    event,
-    render::{self, Elm, Fill},
-};
-use sdl2::render::{Canvas, RenderTarget};
 
 const RETRY_PAUSE: Duration = Duration::from_millis(100);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
@@ -309,99 +311,10 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
             keymod,
             ..
         } => {
-            /* Note: The analysis below encodes my US Mac Book Pro keyboard, almost completely. */
-            /* Longer-term, we need a more complex design to handle other mappings and corresponding keyboard variations. */
-
-            let shift = keymod.contains(sdl2::keyboard::Mod::LSHIFTMOD)
-                || keymod.contains(sdl2::keyboard::Mod::RSHIFTMOD);
-            let key = match &kc {
-                Keycode::Tab => "Tab".to_string(),
-                Keycode::Space => " ".to_string(),
-                Keycode::Return => "Enter".to_string(),
-                Keycode::Left => "ArrowLeft".to_string(),
-                Keycode::Right => "ArrowRight".to_string(),
-                Keycode::Up => "ArrowUp".to_string(),
-                Keycode::Down => "ArrowDown".to_string(),
-                Keycode::Backspace => "Backspace".to_string(),
-                Keycode::LShift => "Shift".to_string(),
-                Keycode::Num0 => (if shift { ")" } else { "0" }).to_string(),
-                Keycode::Num1 => (if shift { "!" } else { "1" }).to_string(),
-                Keycode::Num2 => (if shift { "@" } else { "2" }).to_string(),
-                Keycode::Num3 => (if shift { "#" } else { "3" }).to_string(),
-                Keycode::Num4 => (if shift { "$" } else { "4" }).to_string(),
-                Keycode::Num5 => (if shift { "%" } else { "5" }).to_string(),
-                Keycode::Num6 => (if shift { "^" } else { "6" }).to_string(),
-                Keycode::Num7 => (if shift { "&" } else { "7" }).to_string(),
-                Keycode::Num8 => (if shift { "*" } else { "8" }).to_string(),
-                Keycode::Num9 => (if shift { "(" } else { "9" }).to_string(),
-                Keycode::A => (if shift { "A" } else { "a" }).to_string(),
-                Keycode::B => (if shift { "B" } else { "b" }).to_string(),
-                Keycode::C => (if shift { "C" } else { "c" }).to_string(),
-                Keycode::D => (if shift { "D" } else { "d" }).to_string(),
-                Keycode::E => (if shift { "E" } else { "e" }).to_string(),
-                Keycode::F => (if shift { "F" } else { "f" }).to_string(),
-                Keycode::G => (if shift { "G" } else { "g" }).to_string(),
-                Keycode::H => (if shift { "H" } else { "h" }).to_string(),
-                Keycode::I => (if shift { "I" } else { "i" }).to_string(),
-                Keycode::J => (if shift { "J" } else { "j" }).to_string(),
-                Keycode::K => (if shift { "K" } else { "k" }).to_string(),
-                Keycode::L => (if shift { "L" } else { "l" }).to_string(),
-                Keycode::M => (if shift { "M" } else { "m" }).to_string(),
-                Keycode::N => (if shift { "N" } else { "n" }).to_string(),
-                Keycode::O => (if shift { "O" } else { "o" }).to_string(),
-                Keycode::P => (if shift { "P" } else { "p" }).to_string(),
-                Keycode::Q => (if shift { "Q" } else { "q" }).to_string(),
-                Keycode::R => (if shift { "R" } else { "r" }).to_string(),
-                Keycode::S => (if shift { "S" } else { "s" }).to_string(),
-                Keycode::T => (if shift { "T" } else { "t" }).to_string(),
-                Keycode::U => (if shift { "U" } else { "u" }).to_string(),
-                Keycode::V => (if shift { "V" } else { "v" }).to_string(),
-                Keycode::W => (if shift { "W" } else { "w" }).to_string(),
-                Keycode::X => (if shift { "X" } else { "x" }).to_string(),
-                Keycode::Y => (if shift { "Y" } else { "y" }).to_string(),
-                Keycode::Z => (if shift { "Z" } else { "z" }).to_string(),
-                Keycode::Equals => (if shift { "+" } else { "=" }).to_string(),
-                Keycode::Plus => "+".to_string(),
-                Keycode::Slash => (if shift { "?" } else { "/" }).to_string(),
-                Keycode::Question => "?".to_string(),
-                Keycode::Period => (if shift { ">" } else { "." }).to_string(),
-                Keycode::Greater => ">".to_string(),
-                Keycode::Comma => (if shift { "<" } else { "," }).to_string(),
-                Keycode::Less => "<".to_string(),
-                Keycode::Backslash => (if shift { "|" } else { "\\" }).to_string(),
-                Keycode::Colon => ":".to_string(),
-                Keycode::Semicolon => (if shift { ":" } else { ";" }).to_string(),
-                Keycode::At => "@".to_string(),
-                Keycode::Minus => (if shift { "_" } else { "-" }).to_string(),
-                Keycode::Underscore => "_".to_string(),
-                Keycode::Exclaim => "!".to_string(),
-                Keycode::Hash => "#".to_string(),
-                Keycode::Backquote => (if shift { "~" } else { "`" }).to_string(),
-                Keycode::Quote => (if shift { "\"" } else { "'" }).to_string(),
-                Keycode::Quotedbl => "\"".to_string(),
-                Keycode::LeftBracket => (if shift { "{" } else { "[" }).to_string(),
-                Keycode::RightBracket => (if shift { "}" } else { "]" }).to_string(),
-
-                /* More to consider later (but can we capture these in a browser?):
-                Escape --- (Already caught, to quit.)
-                CapsLock --- Remapped to Control, for me at least.
-                F1--F12 --- Non-standard, but useful for experts' customization macros?
-                Modifiers (??): LCtrl, LShift, LAlt, LGui, RCtrl, RShift, RAlt, RGui
-                */
-                keycode => {
-                    info!("Unrecognized key code, ignoring event: {:?}", keycode);
-                    return None;
-                }
-            };
-            let event = event::Event::KeyDown(vec![event::KeyEventInfo {
-                key: key,
-                /* to do -- include modifier keys' state here */
-                alt: false,
-                ctrl: false,
-                meta: false,
-                shift: shift,
-            }]);
-            Some(event)
+            match keyboard::translate_event(kc, keymod) {
+                Some(ev) => Some(event::Event::KeyDown(vec![ev])),
+                None => None,
+            }
         }
         _ => None,
     }
@@ -458,6 +371,29 @@ pub fn skip_event(ctx: &ConnectCtx) -> event::EventInfo {
     }
 }
 
+async fn do_draw_task(
+    cfg: ConnectCfg,
+    remote_in: mpsc::Receiver<ServerCall>,
+    remote_out: mpsc::Sender<()>,
+) -> IcgtResult<()> {
+    /* Create our own agent here since we cannot Send it here from the main thread. */
+    let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
+    let agent = create_agent(&cfg.replica_url)?;
+    let ctx = ConnectCtx {
+        cfg,
+        canister_id,
+        agent,
+    };
+    loop {
+        let sc = remote_in.recv().unwrap();
+        if let ServerCall::FlushQuit = sc {
+            return Ok(());
+        };
+        server_call(&ctx, sc).await?;
+        remote_out.send(()).unwrap();
+    }
+}
+
 async fn do_update_task(
     cfg: ConnectCfg,
     remote_in: mpsc::Receiver<ServerCall>,
@@ -489,25 +425,46 @@ async fn event_loop<T: RenderTarget>(
 ) -> Result<(), IcgtError> {
     info!("SDL canvas.info().name => \"{}\"", canvas.info().name);
 
-    let cfg = ctx.cfg.clone();
     let mut window_dim = window_dim_.clone();
 
     let mut q_key_infos = vec![];
     let mut u_key_infos = vec![];
 
     // ---------------------------------------------------------------------
+    // Update task
+    let (update_in, update_out) = {
+        let cfg = ctx.cfg.clone();
 
-    // Interaction cycle as two halves (local/remote); each half is a thread.
-    // There are four end points along the cycle's halves:
+        // Interaction cycle as two halves (local/remote); each half is a thread.
+        // There are four end points along the cycle's halves:
+        let (local_out, remote_in) = mpsc::channel::<ServerCall>();
+        let (remote_out, local_in) = mpsc::channel::<()>();
 
-    let (local_out, remote_in) = mpsc::channel::<ServerCall>();
-    let (remote_out, local_in) = mpsc::channel::<()>();
+        // 1. Remote interactions via update calls to server.
+        // (Consumes remote_in and produces remote_out).
 
-    // 1. Remote interactions via update calls to server.
-    // (Consumes remote_in and produces remote_out).
+        task::spawn(do_update_task(cfg, remote_in, remote_out));
+        local_out.send(ServerCall::Update(vec![skip_event(&ctx)]))?;
+        (local_in, local_out)
+    };
 
-    task::spawn(do_update_task(cfg, remote_in, remote_out));
-    local_out.send(ServerCall::Update(vec![skip_event(&ctx)]))?;
+    // ---------------------------------------------------------------------
+    // Draw task
+    let (draw_in, draw_out) = {
+        let cfg = ctx.cfg.clone();
+
+        // Interaction cycle as two halves (local/remote); each half is a thread.
+        // There are four end points along the cycle's halves:
+        let (local_out, remote_in) = mpsc::channel::<ServerCall>();
+        let (remote_out, local_in) = mpsc::channel::<()>();
+
+        // 1. Remote interactions via update calls to server.
+        // (Consumes remote_in and produces remote_out).
+
+        task::spawn(do_draw_task(cfg, remote_in, remote_out));
+        (local_in, local_out)
+    };
+    drop((draw_in, draw_out));
 
     let mut quit_request = false;
 
@@ -599,20 +556,20 @@ async fn event_loop<T: RenderTarget>(
             }
         };
         // Is update task is ready for input?
-        // (Signaled by local_in being ready to read.)
-        match local_in.try_recv() {
+        // (Signaled by update_in being ready to read.)
+        match update_in.try_recv() {
             Ok(()) => {
                 update_responses += 1;
                 info!("update_responses = {}", update_responses);
-                local_out
+                update_out
                     .send(ServerCall::Update(q_key_infos.clone()))
                     .unwrap();
                 if quit_request {
                     println!("Continue: Quitting...");
                     println!("Waiting for final update response.");
-                    match local_in.try_recv() {
+                    match update_in.try_recv() {
                         Ok(()) => {
-                            local_out.send(ServerCall::FlushQuit).unwrap();
+                            update_out.send(ServerCall::FlushQuit).unwrap();
                             println!("Done.");
                             return Ok(());
                         }

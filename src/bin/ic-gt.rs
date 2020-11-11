@@ -623,7 +623,7 @@ async fn start_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
             )
             .position_centered()
             .resizable()
-            //.input_grabbed()
+            .input_grabbed()
             //.fullscreen()
             //.fullscreen_desktop()
             .build()

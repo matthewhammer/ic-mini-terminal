@@ -25,6 +25,7 @@ use ic_agent::Agent;
 use ic_types::Principal;
 
 use candid::Nat;
+use chrono::prelude::*;
 use delay::Delay;
 use num_traits::cast::ToPrimitive;
 use sdl2::event::Event as SysEvent; // not to be confused with our own definition
@@ -34,7 +35,15 @@ use std::io;
 use std::sync::mpsc;
 use std::time::Duration;
 use tokio::task;
-use chrono::prelude::*;
+
+use icgt::{
+    keyboard,
+    types::{
+        event,
+        render::{self, Elm, Fill},
+    },
+};
+use sdl2::render::{Canvas, RenderTarget};
 
 /// Internet Computer Game Terminal (ic-gt)
 #[derive(StructOpt, Debug, Clone)]
@@ -123,8 +132,8 @@ impl std::convert::From<ic_agent::AgentError> for IcgtError {
     }
 }
 
-impl std::convert::From<std::sync::mpsc::SendError<ServerCall>> for IcgtError {
-    fn from(_s: std::sync::mpsc::SendError<ServerCall>) -> Self {
+impl<T> std::convert::From<std::sync::mpsc::SendError<T>> for IcgtError {
+    fn from(_s: std::sync::mpsc::SendError<T>) -> Self {
         IcgtError::String("send error".to_string())
     }
 }
@@ -153,12 +162,6 @@ fn init_log(level_filter: log::LevelFilter) {
         .write_style(WriteStyle::Always)
         .init();
 }
-
-use icgt::types::{
-    event,
-    render::{self, Elm, Fill},
-};
-use sdl2::render::{Canvas, RenderTarget};
 
 const RETRY_PAUSE: Duration = Duration::from_millis(100);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
@@ -308,101 +311,10 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
             keycode: Some(ref kc),
             keymod,
             ..
-        } => {
-            /* Note: The analysis below encodes my US Mac Book Pro keyboard, almost completely. */
-            /* Longer-term, we need a more complex design to handle other mappings and corresponding keyboard variations. */
-
-            let shift = keymod.contains(sdl2::keyboard::Mod::LSHIFTMOD)
-                || keymod.contains(sdl2::keyboard::Mod::RSHIFTMOD);
-            let key = match &kc {
-                Keycode::Tab => "Tab".to_string(),
-                Keycode::Space => " ".to_string(),
-                Keycode::Return => "Enter".to_string(),
-                Keycode::Left => "ArrowLeft".to_string(),
-                Keycode::Right => "ArrowRight".to_string(),
-                Keycode::Up => "ArrowUp".to_string(),
-                Keycode::Down => "ArrowDown".to_string(),
-                Keycode::Backspace => "Backspace".to_string(),
-                Keycode::LShift => "Shift".to_string(),
-                Keycode::Num0 => (if shift { ")" } else { "0" }).to_string(),
-                Keycode::Num1 => (if shift { "!" } else { "1" }).to_string(),
-                Keycode::Num2 => (if shift { "@" } else { "2" }).to_string(),
-                Keycode::Num3 => (if shift { "#" } else { "3" }).to_string(),
-                Keycode::Num4 => (if shift { "$" } else { "4" }).to_string(),
-                Keycode::Num5 => (if shift { "%" } else { "5" }).to_string(),
-                Keycode::Num6 => (if shift { "^" } else { "6" }).to_string(),
-                Keycode::Num7 => (if shift { "&" } else { "7" }).to_string(),
-                Keycode::Num8 => (if shift { "*" } else { "8" }).to_string(),
-                Keycode::Num9 => (if shift { "(" } else { "9" }).to_string(),
-                Keycode::A => (if shift { "A" } else { "a" }).to_string(),
-                Keycode::B => (if shift { "B" } else { "b" }).to_string(),
-                Keycode::C => (if shift { "C" } else { "c" }).to_string(),
-                Keycode::D => (if shift { "D" } else { "d" }).to_string(),
-                Keycode::E => (if shift { "E" } else { "e" }).to_string(),
-                Keycode::F => (if shift { "F" } else { "f" }).to_string(),
-                Keycode::G => (if shift { "G" } else { "g" }).to_string(),
-                Keycode::H => (if shift { "H" } else { "h" }).to_string(),
-                Keycode::I => (if shift { "I" } else { "i" }).to_string(),
-                Keycode::J => (if shift { "J" } else { "j" }).to_string(),
-                Keycode::K => (if shift { "K" } else { "k" }).to_string(),
-                Keycode::L => (if shift { "L" } else { "l" }).to_string(),
-                Keycode::M => (if shift { "M" } else { "m" }).to_string(),
-                Keycode::N => (if shift { "N" } else { "n" }).to_string(),
-                Keycode::O => (if shift { "O" } else { "o" }).to_string(),
-                Keycode::P => (if shift { "P" } else { "p" }).to_string(),
-                Keycode::Q => (if shift { "Q" } else { "q" }).to_string(),
-                Keycode::R => (if shift { "R" } else { "r" }).to_string(),
-                Keycode::S => (if shift { "S" } else { "s" }).to_string(),
-                Keycode::T => (if shift { "T" } else { "t" }).to_string(),
-                Keycode::U => (if shift { "U" } else { "u" }).to_string(),
-                Keycode::V => (if shift { "V" } else { "v" }).to_string(),
-                Keycode::W => (if shift { "W" } else { "w" }).to_string(),
-                Keycode::X => (if shift { "X" } else { "x" }).to_string(),
-                Keycode::Y => (if shift { "Y" } else { "y" }).to_string(),
-                Keycode::Z => (if shift { "Z" } else { "z" }).to_string(),
-                Keycode::Equals => (if shift { "+" } else { "=" }).to_string(),
-                Keycode::Plus => "+".to_string(),
-                Keycode::Slash => (if shift { "?" } else { "/" }).to_string(),
-                Keycode::Question => "?".to_string(),
-                Keycode::Period => (if shift { ">" } else { "." }).to_string(),
-                Keycode::Greater => ">".to_string(),
-                Keycode::Comma => (if shift { "<" } else { "," }).to_string(),
-                Keycode::Less => "<".to_string(),
-                Keycode::Backslash => (if shift { "|" } else { "\\" }).to_string(),
-                Keycode::Colon => ":".to_string(),
-                Keycode::Semicolon => (if shift { ":" } else { ";" }).to_string(),
-                Keycode::At => "@".to_string(),
-                Keycode::Minus => (if shift { "_" } else { "-" }).to_string(),
-                Keycode::Underscore => "_".to_string(),
-                Keycode::Exclaim => "!".to_string(),
-                Keycode::Hash => "#".to_string(),
-                Keycode::Backquote => (if shift { "~" } else { "`" }).to_string(),
-                Keycode::Quote => (if shift { "\"" } else { "'" }).to_string(),
-                Keycode::Quotedbl => "\"".to_string(),
-                Keycode::LeftBracket => (if shift { "{" } else { "[" }).to_string(),
-                Keycode::RightBracket => (if shift { "}" } else { "]" }).to_string(),
-
-                /* More to consider later (but can we capture these in a browser?):
-                Escape --- (Already caught, to quit.)
-                CapsLock --- Remapped to Control, for me at least.
-                F1--F12 --- Non-standard, but useful for experts' customization macros?
-                Modifiers (??): LCtrl, LShift, LAlt, LGui, RCtrl, RShift, RAlt, RGui
-                */
-                keycode => {
-                    info!("Unrecognized key code, ignoring event: {:?}", keycode);
-                    return None;
-                }
-            };
-            let event = event::Event::KeyDown(vec![event::KeyEventInfo {
-                key: key,
-                /* to do -- include modifier keys' state here */
-                alt: false,
-                ctrl: false,
-                meta: false,
-                shift: shift,
-            }]);
-            Some(event)
-        }
+        } => match keyboard::translate_event(kc, keymod) {
+            Some(ev) => Some(event::Event::KeyDown(vec![ev])),
+            None => None,
+        },
         _ => None,
     }
 }
@@ -410,7 +322,7 @@ fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
 pub async fn redraw<T: RenderTarget>(
     canvas: &mut Canvas<T>,
     dim: &render::Dim,
-    rr: &render::Result,
+    rr: &Option<render::Result>,
 ) -> Result<(), String> {
     let pos = render::Pos {
         x: nat_zero(),
@@ -418,17 +330,17 @@ pub async fn redraw<T: RenderTarget>(
     };
     let fill = render::Fill::Closed((nat_zero(), nat_zero(), nat_zero()));
     match rr {
-        render::Result::Ok(render::Out::Draw(elm)) => {
+        Some(render::Result::Ok(render::Out::Draw(elm))) => {
             draw_rect_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
         }
-        render::Result::Ok(render::Out::Redraw(elms)) => {
+        Some(render::Result::Ok(render::Out::Redraw(elms))) => {
             if elms.len() == 1 && elms[0].0 == "screen" {
                 draw_rect_elms(canvas, &pos, dim, &fill, &vec![elms[0].1.clone()])?;
             } else {
                 warn!("unrecognized redraw elements {:?}", elms);
             }
         }
-        render::Result::Err(render::Out::Draw(elm)) => {
+        Some(render::Result::Err(render::Out::Draw(elm))) => {
             draw_rect_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
         }
         _ => unimplemented!(),
@@ -443,12 +355,12 @@ pub async fn redraw<T: RenderTarget>(
 // skip events just have meta info, needed for _customized_ (per-user) views.
 // alternatively, the "event" corresponding to getting the current view is the Skip event.
 pub fn skip_event(ctx: &ConnectCtx) -> event::EventInfo {
-    event::EventInfo{
-        user_info: event::UserInfo{
+    event::EventInfo {
+        user_info: event::UserInfo {
             user_name: ctx.cfg.user_info.0.clone(),
             text_color: (
                 ctx.cfg.user_info.1.clone(),
-                (Nat::from(0), Nat::from(0), Nat::from(0))
+                (Nat::from(0), Nat::from(0), Nat::from(0)),
             ),
         },
         nonce: None,
@@ -456,6 +368,50 @@ pub fn skip_event(ctx: &ConnectCtx) -> event::EventInfo {
         date_time_utc: Utc::now().to_rfc3339(),
         event: event::Event::Skip,
     }
+}
+
+async fn do_view_task(
+    cfg: ConnectCfg,
+    remote_in: mpsc::Receiver<Option<(render::Dim, Vec<event::EventInfo>)>>,
+    remote_out: mpsc::Sender<Option<render::Result>>,
+) -> IcgtResult<()> {
+    /* Create our own agent here since we cannot Send it here from the main thread. */
+    let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
+    let agent = create_agent(&cfg.replica_url)?;
+    let ctx = ConnectCtx {
+        cfg: cfg.clone(),
+        canister_id,
+        agent,
+    };
+
+    loop {
+        let events = remote_in.recv().unwrap();
+
+        match events {
+            None => return Ok(()),
+            Some((window_dim, events)) => {
+                let rr = server_call(&ctx, ServerCall::View(window_dim, events)).await?;
+                remote_out.send(rr).unwrap();
+            }
+        }
+    }
+}
+
+async fn do_redraw<T1: RenderTarget, T2: RenderTarget>(
+    _cli: &CliOpt,
+    window_dim: &render::Dim,
+    window_canvas: &mut Canvas<T1>,
+    file_canvas: &mut Canvas<T2>,
+    data: &Option<render::Result>,
+) -> IcgtResult<()> {
+    // Window-video drawing, (to do -- only if enabled by CLI)
+    redraw(window_canvas, window_dim, data).await?;
+
+    // File drawing, (to do -- only if enabled by CLI)
+    redraw(file_canvas, window_dim, data).await?;
+    // to do -- write the canvas as a bitmap, to a timestamped image file
+
+    Ok(())
 }
 
 async fn do_update_task(
@@ -481,42 +437,91 @@ async fn do_update_task(
     }
 }
 
-async fn event_loop<T: RenderTarget>(
-    ctx: ConnectCtx,
-    window_dim_: render::Dim,
-    sdl: sdl2::Sdl,
-    canvas: &mut Canvas<T>,
-) -> Result<(), IcgtError> {
-    info!("SDL canvas.info().name => \"{}\"", canvas.info().name);
+async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
+    let mut window_dim = render::Dim {
+        width: Nat::from(320),
+        height: Nat::from(240),
+    }; // use CLI to init
 
-    let cfg = ctx.cfg.clone();
-    let mut window_dim = window_dim_.clone();
+    let sdl = sdl2::init()?;
 
-    let mut q_key_infos = vec![];
-    let mut u_key_infos = vec![];
+    // to do --- if headless, do not do these steps; window_canvas is None
+    let video_subsystem = sdl.video()?;
+    let window = video_subsystem
+        .window(
+            "IC Game Terminal",
+            nat_ceil(&window_dim.width),
+            nat_ceil(&window_dim.height),
+        )
+        .position_centered()
+        .resizable()
+        .input_grabbed() // to do -- CI flag
+        .build()
+        .map_err(|e| e.to_string())?;
 
-    // ---------------------------------------------------------------------
+    let mut window_canvas = window
+        .into_canvas()
+        .target_texture()
+        .present_vsync()
+        .build()
+        .map_err(|e| e.to_string())?;
 
-    // Interaction cycle as two halves (local/remote); each half is a thread.
-    // There are four end points along the cycle's halves:
+    // to do --- if file-less, do not do these steps; file_canvas is None
+    let mut file_canvas = {
+        let surface = sdl2::surface::Surface::new(
+            nat_ceil(&window_dim.width),
+            nat_ceil(&window_dim.height),
+            sdl2::pixels::PixelFormatEnum::RGBA8888,
+        )?;
+        surface.into_canvas()?
+    };
 
-    let (local_out, remote_in) = mpsc::channel::<ServerCall>();
-    let (remote_out, local_in) = mpsc::channel::<()>();
+    let mut view_events = vec![];
+    let mut update_events = vec![];
 
-    // 1. Remote interactions via update calls to server.
-    // (Consumes remote_in and produces remote_out).
+    let (update_in, update_out) = /* Begin update task */ {
+        let cfg = ctx.cfg.clone();
 
-    task::spawn(do_update_task(cfg, remote_in, remote_out));
-    local_out.send(ServerCall::Update(vec![skip_event(&ctx)]))?;
+        // Interaction cycle as two halves (local/remote); each half is a thread.
+        // There are four end points along the cycle's halves:
+        let (local_out, remote_in) = mpsc::channel::<ServerCall>();
+        let (remote_out, local_in) = mpsc::channel::<()>();
 
-    let mut quit_request = false;
+        // 1. Remote interactions via update calls to server.
+        // (Consumes remote_in and produces remote_out).
+
+        task::spawn(do_update_task(cfg, remote_in, remote_out));
+        local_out.send(ServerCall::Update(vec![skip_event(&ctx)]))?;
+        (local_in, local_out)
+    };
+
+    let (view_in, view_out) = /* Begin view task */ {
+        let cfg = ctx.cfg.clone();
+
+        // Interaction cycle as two halves (local/remote); each half is a thread.
+        // There are four end points along the cycle's halves:
+        let (local_out, remote_in) = mpsc::channel::<Option<(render::Dim, Vec<event::EventInfo>)>>();
+        let (remote_out, local_in) = mpsc::channel::<Option<render::Result>>();
+
+        // 1. Remote interactions via view calls to server.
+        // (Consumes remote_in and produces remote_out).
+
+        task::spawn(do_view_task(cfg, remote_in, remote_out));
+        local_out.send(Some((window_dim.clone(), vec![skip_event(&ctx)])))?;
+        (local_in, local_out)
+    };
+
+    let mut quit_request = false; // user has requested to quit: shut down gracefully.
+    let mut dirty_flag = true; // more events ready for view task
+    let mut ready_flag = true; // view task is ready for more events
 
     let mut update_requests = Nat::from(1); // count update task requests (already one).
     let mut update_responses = Nat::from(0); // count update task responses (none yet).
 
-    // 2. Local interactions via the SDL Event loop.
-    // (Consumes local_in and produces local_out).
+    let mut view_requests = Nat::from(1); // count view task requests (already one).
+    let mut view_responses = Nat::from(0); // count view task responses (none yet).
 
+    // 2. Local interactions via the SDL Event loop.
     let mut event_pump = {
         use sdl2::event::EventType;
         let mut p = sdl.event_pump()?;
@@ -527,14 +532,6 @@ async fn event_loop<T: RenderTarget>(
         p
     };
 
-    // initial draw (not really a "redraw" yet):
-    {
-        let rr = server_call(&ctx, ServerCall::View(window_dim.clone(),
-                                                    vec![skip_event(&ctx)])).await?;
-        redraw(canvas, &window_dim, &rr.unwrap()).await?;
-    };
-
-    // main loop
     'running: loop {
         if let Some(system_event) = event_pump.wait_event_timeout(13) {
             // utc/local timestamps for event
@@ -551,7 +548,7 @@ async fn event_loop<T: RenderTarget>(
                 }
                 event::Event::Skip => {
                     // ignore
-                },
+                }
                 event::Event::Quit => {
                     debug!("Quit");
                     println!("Begin: Quitting...");
@@ -560,136 +557,118 @@ async fn event_loop<T: RenderTarget>(
                 }
                 event::Event::WindowSize(new_dim) => {
                     debug!("WindowSize {:?}", new_dim);
+                    dirty_flag = true;
                     window_dim = new_dim;
-                    let mut buffer = u_key_infos.clone();
-                    buffer.append(&mut (q_key_infos.clone()));
-                    buffer.push(skip_event(&ctx));
-                    let rr =
-                        server_call(&ctx, ServerCall::View(window_dim.clone(), buffer.clone()))
-                            .await?;
-                    redraw(canvas, &window_dim, &rr.unwrap()).await?;
+                    // to do -- add event to buffer, and send to server
                 }
                 event::Event::KeyDown(ref keys) => {
                     debug!("KeyDown {:?}", keys);
-                    q_key_infos.push(event::EventInfo{
-                        user_info: event::UserInfo{
+                    dirty_flag = true;
+                    view_events.push(event::EventInfo {
+                        user_info: event::UserInfo {
                             user_name: ctx.cfg.user_info.0.clone(),
                             text_color: (
                                 ctx.cfg.user_info.1.clone(),
-                                (Nat::from(0), Nat::from(0), Nat::from(0))
+                                (Nat::from(0), Nat::from(0), Nat::from(0)),
                             ),
                         },
                         nonce: None,
                         date_time_local: Local::now().to_rfc3339(),
                         date_time_utc: Utc::now().to_rfc3339(),
-                        event: event::Event::KeyDown(keys.clone())
+                        event: event::Event::KeyDown(keys.clone()),
                     });
-                    /* to do -- move downward, after collecting all waiting events */ {
-                        let rr: render::Result = {
-                            let mut buffer = u_key_infos.clone();
-                            buffer.append(&mut (q_key_infos.clone()));
-                            let rr =
-                                server_call(&ctx, ServerCall::View(window_dim.clone(), buffer.clone()))
-                                .await?;
-                            rr.unwrap()
-                        };
-                        redraw(canvas, &window_dim, &rr).await?;
-                    }
                 }
             }
         };
-        // Is update task is ready for input?
-        // (Signaled by local_in being ready to read.)
-        match local_in.try_recv() {
-            Ok(()) => {
-                update_responses += 1;
-                info!("update_responses = {}", update_responses);
-                local_out
-                    .send(ServerCall::Update(q_key_infos.clone()))
-                    .unwrap();
-                if quit_request {
-                    println!("Continue: Quitting...");
-                    println!("Waiting for final update response.");
-                    match local_in.try_recv() {
-                        Ok(()) => {
-                            local_out.send(ServerCall::FlushQuit).unwrap();
-                            println!("Done.");
-                            return Ok(());
+
+        /* attend to update task */
+        {
+            match update_in.try_recv() {
+                Ok(()) => {
+                    update_responses += 1;
+                    info!("update_responses = {}", update_responses);
+                    update_out
+                        .send(ServerCall::Update(view_events.clone()))
+                        .unwrap();
+                    if quit_request {
+                        println!("Continue: Quitting...");
+                        println!("Waiting for final update-task response.");
+                        match update_in.try_recv() {
+                            Ok(()) => {
+                                update_out.send(ServerCall::FlushQuit).unwrap();
+                                println!("Done.");
+                            }
+                            Err(e) => return Err(IcgtError::String(e.to_string())),
                         }
-                        Err(e) => return Err(IcgtError::String(e.to_string())),
-                    }
-                };
-                update_requests += 1;
-                info!("update_requests = {}", update_requests);
-                u_key_infos = q_key_infos;
-                q_key_infos = vec![];
-                {
-                    let mut buffer = u_key_infos.clone();
-                    buffer.push(skip_event(&ctx));
-                    let rr = server_call(
-                        &ctx,
-                        ServerCall::View(window_dim.clone(), buffer),
+                    };
+                    update_requests += 1;
+                    info!("update_requests = {}", update_requests);
+                    update_events = view_events;
+                    view_events = vec![];
+                    dirty_flag = true;
+                }
+                Err(mpsc::TryRecvError::Empty) => { /* not ready; do nothing */ }
+                Err(e) => error!("{:?}", e),
+            }
+        };
+
+        if quit_request {
+            println!("Continue: Quitting view task...");
+            view_out.send(None).unwrap();
+            println!("Done.");
+            match view_in.try_recv() {
+                Ok(None) => {}
+                Ok(Some(_)) => {
+                    return Err(IcgtError::String(
+                        "expected view task to reply None, not Some(_)".to_string(),
+                    ))
+                }
+                Err(e) => return Err(IcgtError::String(e.to_string())),
+            }
+        } else
+        /* attend to view task */
+        {
+            match view_in.try_recv() {
+                Ok(rr) => {
+                    view_responses += 1;
+                    info!("view_responses = {}", view_responses);
+
+                    do_redraw(
+                        &(ctx.cfg).cli_opt,
+                        &window_dim,
+                        &mut window_canvas,
+                        &mut file_canvas,
+                        &rr,
                     )
                     .await?;
-                    redraw(canvas, &window_dim, &rr.unwrap()).await?;
-                };
+
+                    ready_flag = true;
+                }
+                Err(mpsc::TryRecvError::Empty) => { /* not ready; do nothing */ }
+                Err(e) => error!("{:?}", e),
+            };
+
+            if dirty_flag && ready_flag {
+                dirty_flag = false;
+                ready_flag = false;
+                let mut events = update_events.clone();
+                events.append(&mut (view_events.clone()));
+
+                view_out.send(Some((window_dim.clone(), events))).unwrap();
+
+                view_requests += 1;
+                info!("view_requests = {}", view_requests);
             }
-            Err(mpsc::TryRecvError::Empty) => { /* not ready; do nothing */ }
-            Err(e) => error!("{:?}", e),
         };
+
+        // attend to next batch of local events, and loop everything above
         continue 'running;
     }
 }
 
-async fn start_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
-    let window_dim = render::Dim {
-        width: Nat::from(1000),
-        height: Nat::from(666),
-    };
-    let sdl = sdl2::init()?;
-
-    if ctx.cfg.cli_opt.no_window {
-        let surface = sdl2::surface::Surface::new(
-            nat_ceil(&window_dim.width),
-            nat_ceil(&window_dim.height),
-            sdl2::pixels::PixelFormatEnum::RGBA8888,
-        )?;
-        let mut canvas = surface.into_canvas()?;
-        event_loop(ctx, window_dim, sdl, &mut canvas).await?;
-    } else {
-        let video_subsystem = sdl.video()?;
-        let window = video_subsystem
-            .window(
-                "IC Game Terminal",
-                nat_ceil(&window_dim.width),
-                nat_ceil(&window_dim.height),
-            )
-            .position_centered()
-            .resizable()
-            //.input_grabbed()
-            //.fullscreen()
-            //.fullscreen_desktop()
-            .build()
-            .map_err(|e| e.to_string())?;
-
-        let mut canvas = window
-            .into_canvas()
-            .target_texture()
-            .present_vsync()
-            .build()
-            .map_err(|e| e.to_string())?;
-
-        event_loop(ctx, window_dim, sdl, &mut canvas).await?;
-    };
-    Ok(())
-}
-
 // to do -- fix hack; refactor to remove Option<_> in return type
 
-pub async fn server_call(
-    ctx: &ConnectCtx,
-    call: ServerCall,
-) -> IcgtResult<Option<render::Result>> {
+pub async fn server_call(ctx: &ConnectCtx, call: ServerCall) -> IcgtResult<Option<render::Result>> {
     if let ServerCall::FlushQuit = call {
         return Ok(None);
     };
@@ -717,7 +696,8 @@ pub async fn server_call(
     let blob_res = match call.clone() {
         ServerCall::FlushQuit => None,
         ServerCall::View(_window_dim, _keys) => {
-            let resp = ctx.agent
+            let resp = ctx
+                .agent
                 .query(&ctx.canister_id, "view")
                 .with_arg(arg_bytes)
                 .call()
@@ -725,7 +705,8 @@ pub async fn server_call(
             Some(resp)
         }
         ServerCall::Update(_keys) => {
-            let resp = ctx.agent
+            let resp = ctx
+                .agent
                 .update(&ctx.canister_id, "update")
                 .with_arg(arg_bytes)
                 .call_and_wait(delay)
@@ -797,14 +778,15 @@ fn main() -> IcgtResult<()> {
             replica_url,
             user_info_text,
         } => {
-
             let raw_args: (String, (u8, u8, u8)) = ron::de::from_str(&user_info_text).unwrap();
             let user_info: UserInfo = {
                 (
                     raw_args.0,
-                    (Nat::from(raw_args.1.0),
-                     Nat::from(raw_args.1.1),
-                     Nat::from(raw_args.1.2)),
+                    (
+                        Nat::from((raw_args.1).0),
+                        Nat::from((raw_args.1).1),
+                        Nat::from((raw_args.1).2),
+                    ),
                 )
             };
             let cfg = ConnectCfg {
@@ -821,7 +803,7 @@ fn main() -> IcgtResult<()> {
                 agent,
             };
             info!("Connecting to IC canister: {:?}", ctx.cfg);
-            runtime.block_on(start_event_loop(ctx)).ok();
+            runtime.block_on(local_event_loop(ctx)).ok();
         }
     };
     Ok(())

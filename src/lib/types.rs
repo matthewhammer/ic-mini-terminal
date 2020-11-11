@@ -46,7 +46,7 @@ pub mod event {
         #[serde(rename(serialize = "userName"))]
         pub user_name: String,
         #[serde(rename(serialize = "textColor"))]
-        pub text_color: ((Nat, Nat, Nat), (Nat, Nat, Nat))
+        pub text_color: ((Nat, Nat, Nat), (Nat, Nat, Nat)),
     }
 
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]

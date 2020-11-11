@@ -5,7 +5,7 @@ use super::types::event::KeyEventInfo;
 
 use log::info;
 
-pub fn translate_event(keycode: &Keycode, keymod:  &Mod) -> Option<KeyEventInfo> {
+pub fn translate_event(keycode: &Keycode, keymod: &Mod) -> Option<KeyEventInfo> {
     /* Note: The analysis below encodes my US Mac Book Pro keyboard, almost completely. */
     /* Longer-term, we need a more complex design to handle other mappings and corresponding keyboard variations. */
 

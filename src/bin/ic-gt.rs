@@ -398,7 +398,7 @@ async fn do_view_task(
 }
 
 async fn do_redraw<T1: RenderTarget, T2: RenderTarget>(
-    cli: &CliOpt,
+    _cli: &CliOpt,
     window_dim: &render::Dim,
     window_canvas: &mut Canvas<T1>,
     file_canvas: &mut Canvas<T2>,
@@ -497,14 +497,13 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
 
     let (view_in, view_out) = /* Begin view task */ {
         let cfg = ctx.cfg.clone();
-        let dim = window_dim.clone();
 
         // Interaction cycle as two halves (local/remote); each half is a thread.
         // There are four end points along the cycle's halves:
         let (local_out, remote_in) = mpsc::channel::<Option<(render::Dim, Vec<event::EventInfo>)>>();
         let (remote_out, local_in) = mpsc::channel::<Option<render::Result>>();
 
-        // 1. Remote interactions via update calls to server.
+        // 1. Remote interactions via view calls to server.
         // (Consumes remote_in and produces remote_out).
 
         task::spawn(do_view_task(cfg, remote_in, remote_out));
@@ -512,13 +511,15 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
         (local_in, local_out)
     };
 
-    let mut quit_request = false;
+    let mut quit_request = false; // user has requested to quit: shut down gracefully.
+    let mut dirty_flag = true; // more events ready for view task
+    let mut ready_flag = true; // view task is ready for more events
 
     let mut update_requests = Nat::from(1); // count update task requests (already one).
     let mut update_responses = Nat::from(0); // count update task responses (none yet).
 
-    let mut view_requests = Nat::from(1); // count draw task requests (already one).
-    let mut view_responses = Nat::from(0); // count draw task responses (none yet).
+    let mut view_requests = Nat::from(1); // count view task requests (already one).
+    let mut view_responses = Nat::from(0); // count view task responses (none yet).
 
     // 2. Local interactions via the SDL Event loop.
     let mut event_pump = {
@@ -556,11 +557,13 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
                 }
                 event::Event::WindowSize(new_dim) => {
                     debug!("WindowSize {:?}", new_dim);
+                    dirty_flag = true;
                     window_dim = new_dim;
                     // to do -- add event to buffer, and send to server
                 }
                 event::Event::KeyDown(ref keys) => {
                     debug!("KeyDown {:?}", keys);
+                    dirty_flag = true;
                     view_events.push(event::EventInfo {
                         user_info: event::UserInfo {
                             user_name: ctx.cfg.user_info.0.clone(),
@@ -602,12 +605,27 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
                     info!("update_requests = {}", update_requests);
                     update_events = view_events;
                     view_events = vec![];
+                    dirty_flag = true;
                 }
                 Err(mpsc::TryRecvError::Empty) => { /* not ready; do nothing */ }
                 Err(e) => error!("{:?}", e),
             }
         };
 
+        if quit_request {
+            println!("Continue: Quitting view task...");
+            view_out.send(None).unwrap();
+            println!("Done.");
+            match view_in.try_recv() {
+                Ok(None) => {}
+                Ok(Some(_)) => {
+                    return Err(IcgtError::String(
+                        "expected view task to reply None, not Some(_)".to_string(),
+                    ))
+                }
+                Err(e) => return Err(IcgtError::String(e.to_string())),
+            }
+        } else
         /* attend to view task */
         {
             match view_in.try_recv() {
@@ -615,39 +633,31 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
                     view_responses += 1;
                     info!("view_responses = {}", view_responses);
 
-                    if quit_request {
-                        println!("Continue: Quitting view task...");
-                        view_out.send(None).unwrap();
-                        println!("Done.");
-                        match view_in.try_recv() {
-                            Ok(None) => {}
-                            Ok(Some(_)) => {
-                                return Err(IcgtError::String(
-                                    "expected view task to reply None, not Some(_)".to_string(),
-                                ))
-                            }
-                            Err(e) => return Err(IcgtError::String(e.to_string())),
-                        }
-                    };
-
                     do_redraw(
                         &(ctx.cfg).cli_opt,
                         &window_dim,
                         &mut window_canvas,
                         &mut file_canvas,
                         &rr,
-                    );
+                    )
+                    .await?;
 
-                    let mut events = update_events.clone();
-                    events.append(&mut (view_events.clone()));
-
-                    view_out.send(Some((window_dim.clone(), events))).unwrap();
-
-                    view_requests += 1;
-                    info!("view_requests = {}", view_requests);
+                    ready_flag = true;
                 }
                 Err(mpsc::TryRecvError::Empty) => { /* not ready; do nothing */ }
                 Err(e) => error!("{:?}", e),
+            };
+
+            if dirty_flag && ready_flag {
+                dirty_flag = false;
+                ready_flag = false;
+                let mut events = update_events.clone();
+                events.append(&mut (view_events.clone()));
+
+                view_out.send(Some((window_dim.clone(), events))).unwrap();
+
+                view_requests += 1;
+                info!("view_requests = {}", view_requests);
             }
         };
 

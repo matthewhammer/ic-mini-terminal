@@ -20,7 +20,7 @@ See examples:
 
 #### Text editor
 
-![Text editor screenshot](img/textEdit-202010091219.png)
+![Text editor screenshot](img/202011121002-TextEdit-ModifierKeys.png)
 
 Run the text edtior demo in a local replica (using `dfx`):
 

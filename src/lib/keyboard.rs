@@ -92,11 +92,10 @@ pub fn translate_event(keycode: &Keycode, keymod: &Mod) -> Option<KeyEventInfo> 
     };
     let event = KeyEventInfo {
         key: key,
-        /* to do -- include modifier keys' state here */
-        alt: false,
-        ctrl: false,
-        meta: false,
-        shift: shift,
+        alt: keymod.contains(Mod::LALTMOD) || keymod.contains(Mod::RALTMOD),
+        ctrl: keymod.contains(Mod::LCTRLMOD) || keymod.contains(Mod::RCTRLMOD),
+        meta: keymod.contains(Mod::LGUIMOD) || keymod.contains(Mod::RGUIMOD),
+        shift: keymod.contains(Mod::LSHIFTMOD) || keymod.contains(Mod::RSHIFTMOD),
     };
     Some(event)
 }

@@ -50,7 +50,7 @@ module {
 
   type Atts = Render.BitMapTextAtts;
 
-  type TxtElm = {#colorZoom:((Nat, Nat, Nat), Nat); #lo; #hi; #h3};
+  type TxtElm = {#colorZoom:((Nat, Nat, Nat), Nat); #lo; #vlo; #hi; #h3};
 
   func txtSty(txtElm : TxtElm) : Atts = {
     switch txtElm {
@@ -59,6 +59,12 @@ module {
            fgFill=#closed(c);
            bgFill=#none;
            flow=horzText(z);
+         };
+    case (#vlo) {
+           zoom=1;
+           fgFill=#closed((100, 100, 100));
+           bgFill=#none;
+           flow=horzText(1);
          };
     case (#lo) {
            zoom=1;
@@ -108,7 +114,11 @@ module {
     case (#keyDown(ks)) {
            tr.textAtts("keyDown ", txtSty(#lo));
            for (k in ks.vals()) {
-             tr.textAtts(k.key # " ", txtSty(#lo));
+             if (k.shift) { tr.textAtts("Shift-", txtSty(#vlo)); };
+             if (k.ctrl) { tr.textAtts("Ctrl-", txtSty(#vlo)); };
+             if (k.alt) { tr.textAtts("Alt-", txtSty(#vlo)); };
+             if (k.meta) { tr.textAtts("Meta-", txtSty(#vlo)); };
+             tr.textAtts(k.key , txtSty(#lo));
            };
          };
     case x { tr.textAtts("??? to do.", txtSty(#lo)) };

@@ -455,7 +455,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
         )
         .position_centered()
         .resizable()
-        .input_grabbed() // to do -- CI flag
+        /*.input_grabbed() // to do -- CI flag*/
         .build()
         .map_err(|e| e.to_string())?;
 

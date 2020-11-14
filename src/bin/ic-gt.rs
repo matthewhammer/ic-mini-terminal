@@ -44,15 +44,21 @@ use icgt::{
     },
 };
 use sdl2::render::{Canvas, RenderTarget};
+use sdl2::surface::Surface;
 
 /// Internet Computer Game Terminal (ic-gt)
 #[derive(StructOpt, Debug, Clone)]
 #[structopt(name = "ic-gt", raw(setting = "clap::AppSettings::DeriveDisplayOrder"))]
 pub struct CliOpt {
-    /// No window for graphics output.
-    /// Filesystem-based graphics output only.
+    /// Path for output files with event and screen captures.
+    #[structopt(short = "o", long = "out", default_value = "./out")]
+    capture_output_path: String,
+    /// Suppress window for graphics output.
     #[structopt(short = "W", long = "no-window")]
     no_window: bool,
+    /// Suppress capturing graphics output.
+    #[structopt(short = "C", long = "no-capture")]
+    no_capture: bool,
     /// Trace-level logging (most verbose)
     #[structopt(short = "t", long = "trace-log")]
     log_trace: bool,
@@ -137,7 +143,11 @@ impl<T> std::convert::From<std::sync::mpsc::SendError<T>> for IcgtError {
         IcgtError::String("send error".to_string())
     }
 }
-
+impl std::convert::From<std::io::Error> for IcgtError {
+    fn from(_s: std::io::Error) -> Self {
+        IcgtError::String("IO error".to_string())
+    }
+}
 impl std::convert::From<String> for IcgtError {
     fn from(s: String) -> Self {
         IcgtError::String(s)
@@ -397,20 +407,25 @@ async fn do_view_task(
     }
 }
 
-async fn do_redraw<T1: RenderTarget, T2: RenderTarget>(
-    _cli: &CliOpt,
+async fn do_redraw<'a, T1: RenderTarget>(
+    cli: &CliOpt,
     window_dim: &render::Dim,
     window_canvas: &mut Canvas<T1>,
-    file_canvas: &mut Canvas<T2>,
+    file_canvas: &mut Canvas<Surface<'a>>,
     data: &Option<render::Result>,
 ) -> IcgtResult<()> {
-    // Window-video drawing, (to do -- only if enabled by CLI)
-    redraw(window_canvas, window_dim, data).await?;
-
-    // File drawing, (to do -- only if enabled by CLI)
-    redraw(file_canvas, window_dim, data).await?;
-    // to do -- write the canvas as a bitmap, to a timestamped image file
-
+    if !cli.no_window {
+        redraw(window_canvas, window_dim, data).await?;
+    }
+    if !cli.no_capture {
+        redraw(file_canvas, window_dim, data).await?;
+        let path = format!(
+            "{}/screen-{}.bmp",
+            cli.capture_output_path,
+            Local::now().to_rfc3339()
+        );
+        file_canvas.surface().save_bmp(path)?;
+    }
     Ok(())
 }
 
@@ -778,6 +793,10 @@ fn main() -> IcgtResult<()> {
             replica_url,
             user_info_text,
         } => {
+            let capout = std::path::Path::new(&cli_opt.capture_output_path);
+            if !capout.exists() {
+                std::fs::create_dir_all(&cli_opt.capture_output_path)?;
+            };
             let raw_args: (String, (u8, u8, u8)) = ron::de::from_str(&user_info_text).unwrap();
             let user_info: UserInfo = {
                 (

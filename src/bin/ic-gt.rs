@@ -395,20 +395,22 @@ pub fn skip_event(ctx: &ConnectCtx) -> event::EventInfo {
 }
 
 pub fn go_engiffen(cli: &CliOpt, window_dim: &render::Dim, paths: &Vec<String>) -> IcgtResult<()> {
-    use std::fs::File;
-    let images = engiffen::load_images(paths);
-    let gif = engiffen::engiffen(&images, cli.engiffen_frame_rate, engiffen::Quantizer::Naive)?;
-    assert_eq!(gif.images.len(), paths.len());
-    let path = format!(
-        "{}/screen-{}x{}-{}.gif",
-        cli.capture_output_path,
-        window_dim.width,
-        window_dim.height,
-        Local::now().to_rfc3339()
-    );
-    let mut output = File::create(&path)?;
-    gif.write(&mut output)?;
-    println!("Wrote {} frames to {}", paths.len(), path);
+    if paths.len() > 0 {
+        use std::fs::File;
+        let images = engiffen::load_images(paths);
+        let gif = engiffen::engiffen(&images, cli.engiffen_frame_rate, engiffen::Quantizer::Naive)?;
+        assert_eq!(gif.images.len(), paths.len());
+        let path = format!(
+            "{}/screen-{}x{}-{}.gif",
+            cli.capture_output_path,
+            window_dim.width,
+            window_dim.height,
+            Local::now().to_rfc3339()
+        );
+        let mut output = File::create(&path)?;
+        gif.write(&mut output)?;
+        println!("Wrote {} frames to {}", paths.len(), path);
+    }
     Ok(())
 }
 
@@ -610,6 +612,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
                 event::Event::WindowSize(new_dim) => {
                     debug!("WindowSize {:?}", new_dim);
                     dirty_flag = true;
+                    view_events.push(skip_event(&ctx));
                     go_engiffen(&ctx.cfg.cli_opt, &window_dim, &engiffen_paths)?;
                     engiffen_paths = vec![];
                     window_dim = new_dim;
@@ -670,7 +673,17 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
                     view_events = vec![];
                     dirty_flag = true;
                 }
-                Err(mpsc::TryRecvError::Empty) => { /* not ready; do nothing */ }
+                Err(mpsc::TryRecvError::Empty) => {
+                    if quit_request {
+                        println!("Continue: Quitting...");
+                        println!("Waiting for final update-task response.");
+                        update_in.recv()?;
+                        update_out.send(ServerCall::FlushQuit)?;
+                        println!("Done.");
+                    } else {
+                        /* not ready; do nothing */
+                    }
+                }
                 Err(e) => error!("{:?}", e),
             }
         };

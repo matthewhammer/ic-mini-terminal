@@ -53,6 +53,9 @@ pub struct CliOpt {
     /// Path for output files with event and screen captures.
     #[structopt(short = "o", long = "out", default_value = "./out")]
     capture_output_path: String,
+    /// Frame rate (uniform) for producing captured GIF files with engiffen.
+    #[structopt(long = "engiffen-framerate", default_value = "16")]
+    engiffen_frame_rate: usize,
     /// Suppress window for graphics output.
     #[structopt(short = "W", long = "no-window")]
     no_window: bool,
@@ -128,6 +131,7 @@ pub enum ServerCall {
 pub enum IcgtError {
     Agent(), /* Clone => Agent(ic_agent::AgentError) */
     String(String),
+    Engiffen(), /* Clone => engiffen::Error */
     RingKeyRejected(ring::error::KeyRejected),
     RingUnspecified(ring::error::Unspecified),
 }
@@ -141,6 +145,11 @@ impl std::convert::From<ic_agent::AgentError> for IcgtError {
 impl<T> std::convert::From<std::sync::mpsc::SendError<T>> for IcgtError {
     fn from(_s: std::sync::mpsc::SendError<T>) -> Self {
         IcgtError::String("send error".to_string())
+    }
+}
+impl std::convert::From<std::sync::mpsc::RecvError> for IcgtError {
+    fn from(_s: std::sync::mpsc::RecvError) -> Self {
+        IcgtError::String("recv error".to_string())
     }
 }
 impl std::convert::From<std::io::Error> for IcgtError {
@@ -161,6 +170,11 @@ impl std::convert::From<ring::error::KeyRejected> for IcgtError {
 impl std::convert::From<ring::error::Unspecified> for IcgtError {
     fn from(r: ring::error::Unspecified) -> Self {
         IcgtError::RingUnspecified(r)
+    }
+}
+impl std::convert::From<engiffen::Error> for IcgtError {
+    fn from(_e: engiffen::Error) -> Self {
+        IcgtError::Engiffen()
     }
 }
 
@@ -380,6 +394,26 @@ pub fn skip_event(ctx: &ConnectCtx) -> event::EventInfo {
     }
 }
 
+pub fn go_engiffen(cli: &CliOpt, window_dim: &render::Dim, paths: &Vec<String>) -> IcgtResult<()> {
+    if paths.len() > 0 {
+        use std::fs::File;
+        let images = engiffen::load_images(paths);
+        let gif = engiffen::engiffen(&images, cli.engiffen_frame_rate, engiffen::Quantizer::Naive)?;
+        assert_eq!(gif.images.len(), paths.len());
+        let path = format!(
+            "{}/screen-{}x{}-{}.gif",
+            cli.capture_output_path,
+            window_dim.width,
+            window_dim.height,
+            Local::now().to_rfc3339()
+        );
+        let mut output = File::create(&path)?;
+        gif.write(&mut output)?;
+        println!("Wrote {} frames to {}", paths.len(), path);
+    }
+    Ok(())
+}
+
 async fn do_view_task(
     cfg: ConnectCfg,
     remote_in: mpsc::Receiver<Option<(render::Dim, Vec<event::EventInfo>)>>,
@@ -395,13 +429,13 @@ async fn do_view_task(
     };
 
     loop {
-        let events = remote_in.recv().unwrap();
+        let events = remote_in.recv()?;
 
         match events {
             None => return Ok(()),
             Some((window_dim, events)) => {
                 let rr = server_call(&ctx, ServerCall::View(window_dim, events)).await?;
-                remote_out.send(rr).unwrap();
+                remote_out.send(rr)?;
             }
         }
     }
@@ -412,6 +446,7 @@ async fn do_redraw<'a, T1: RenderTarget>(
     window_dim: &render::Dim,
     window_canvas: &mut Canvas<T1>,
     file_canvas: &mut Canvas<Surface<'a>>,
+    bmp_paths: &mut Vec<String>,
     data: &Option<render::Result>,
 ) -> IcgtResult<()> {
     if !cli.no_window {
@@ -420,11 +455,14 @@ async fn do_redraw<'a, T1: RenderTarget>(
     if !cli.no_capture {
         redraw(file_canvas, window_dim, data).await?;
         let path = format!(
-            "{}/screen-{}.bmp",
+            "{}/screen-{}x{}-{}.bmp",
             cli.capture_output_path,
+            window_dim.width,
+            window_dim.height,
             Local::now().to_rfc3339()
         );
-        file_canvas.surface().save_bmp(path)?;
+        file_canvas.surface().save_bmp(&path)?;
+        bmp_paths.push(path);
     }
     Ok(())
 }
@@ -493,6 +531,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
 
     let mut view_events = vec![];
     let mut update_events = vec![];
+    let mut engiffen_paths = vec![];
 
     let (update_in, update_out) = /* Begin update task */ {
         let cfg = ctx.cfg.clone();
@@ -573,8 +612,20 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
                 event::Event::WindowSize(new_dim) => {
                     debug!("WindowSize {:?}", new_dim);
                     dirty_flag = true;
+                    view_events.push(skip_event(&ctx));
+                    go_engiffen(&ctx.cfg.cli_opt, &window_dim, &engiffen_paths)?;
+                    engiffen_paths = vec![];
                     window_dim = new_dim;
                     // to do -- add event to buffer, and send to server
+                    file_canvas = {
+                        // Re-size canvas by re-creating it.
+                        let surface = sdl2::surface::Surface::new(
+                            nat_ceil(&window_dim.width),
+                            nat_ceil(&window_dim.height),
+                            sdl2::pixels::PixelFormatEnum::RGBA8888,
+                        )?;
+                        surface.into_canvas()?
+                    };
                 }
                 event::Event::KeyDown(ref keys) => {
                     debug!("KeyDown {:?}", keys);
@@ -610,7 +661,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
                         println!("Waiting for final update-task response.");
                         match update_in.try_recv() {
                             Ok(()) => {
-                                update_out.send(ServerCall::FlushQuit).unwrap();
+                                update_out.send(ServerCall::FlushQuit)?;
                                 println!("Done.");
                             }
                             Err(e) => return Err(IcgtError::String(e.to_string())),
@@ -622,24 +673,30 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
                     view_events = vec![];
                     dirty_flag = true;
                 }
-                Err(mpsc::TryRecvError::Empty) => { /* not ready; do nothing */ }
+                Err(mpsc::TryRecvError::Empty) => {
+                    if quit_request {
+                        println!("Continue: Quitting...");
+                        println!("Waiting for final update-task response.");
+                        update_in.recv()?;
+                        update_out.send(ServerCall::FlushQuit)?;
+                        println!("Done.");
+                    } else {
+                        /* not ready; do nothing */
+                    }
+                }
                 Err(e) => error!("{:?}", e),
             }
         };
 
         if quit_request {
-            println!("Continue: Quitting view task...");
-            view_out.send(None).unwrap();
-            println!("Done.");
-            match view_in.try_recv() {
-                Ok(None) => {}
-                Ok(Some(_)) => {
-                    return Err(IcgtError::String(
-                        "expected view task to reply None, not Some(_)".to_string(),
-                    ))
-                }
-                Err(e) => return Err(IcgtError::String(e.to_string())),
+            go_engiffen(&ctx.cfg.cli_opt, &window_dim, &engiffen_paths)?;
+            {
+                print!("Stopping view task... ");
+                view_out.send(None)?;
+                println!("Done.");
             }
+            println!("All done.");
+            return Ok(());
         } else
         /* attend to view task */
         {
@@ -653,6 +710,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
                         &window_dim,
                         &mut window_canvas,
                         &mut file_canvas,
+                        &mut engiffen_paths,
                         &rr,
                     )
                     .await?;
@@ -669,7 +727,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
                 let mut events = update_events.clone();
                 events.append(&mut (view_events.clone()));
 
-                view_out.send(Some((window_dim.clone(), events))).unwrap();
+                view_out.send(Some((window_dim.clone(), events)))?;
 
                 view_requests += 1;
                 info!("view_requests = {}", view_requests);

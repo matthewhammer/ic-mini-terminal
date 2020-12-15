@@ -2,7 +2,7 @@ name: Release
 on:
   push:
     tags:
-      - '*'
+      - '2020-12-15'
 jobs:
   publish:
     name: Release for ${{ matrix.os }}

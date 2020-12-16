@@ -46,9 +46,9 @@ use icmt::{
 use sdl2::render::{Canvas, RenderTarget};
 use sdl2::surface::Surface;
 
-/// Internet Computer Game Terminal (ic-gt)
+/// Internet Computer Mini Terminal (ic-mt)
 #[derive(StructOpt, Debug, Clone)]
-#[structopt(name = "ic-gt", raw(setting = "clap::AppSettings::DeriveDisplayOrder"))]
+#[structopt(name = "ic-mt", raw(setting = "clap::AppSettings::DeriveDisplayOrder"))]
 pub struct CliOpt {
     /// Path for output files with event and screen captures.
     #[structopt(short = "o", long = "out", default_value = "./out")]
@@ -84,7 +84,7 @@ enum CliCommand {
     Completions { shell: Shell },
     #[structopt(
         name = "connect",
-        about = "Connect to a canister as an IC game server."
+        about = "Connect to an IC canister."
     )]
     Connect {
         replica_url: String,
@@ -126,7 +126,7 @@ pub enum ServerCall {
     FlushQuit,
 }
 
-/// Errors from the game terminal, or its subcomponents
+/// Errors from the mini terminal, or its subcomponents
 #[derive(Debug, Clone)]
 pub enum IcmtError {
     Agent(), /* Clone => Agent(ic_agent::AgentError) */
@@ -502,7 +502,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
     let video_subsystem = sdl.video()?;
     let window = video_subsystem
         .window(
-            "IC Game Terminal",
+            "IC Mini Terminal",
             nat_ceil(&window_dim.width),
             nat_ceil(&window_dim.height),
         )
@@ -821,7 +821,7 @@ pub async fn server_call(ctx: &ConnectCtx, call: ServerCall) -> IcmtResult<Optio
     } else {
         let res = format!("{:?}", blob_res);
         info!("..error result {:?}", res);
-        Err(IcmtError::String("ic-gt error".to_string()))
+        Err(IcmtError::String("ic-mt error".to_string()))
     }
 }
 

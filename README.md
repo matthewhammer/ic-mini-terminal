@@ -1,6 +1,6 @@
-# IC Game Terminal
+# IC Mini Terminal (`ic-mt`)
 
-Keyboard input (⌨) and graphical output (📺) for programs on the [Internet Computer](https://dfinity.org/).
+Minimal keyboard input (⌨) and graphical output (📺) for programs on the [Internet Computer](https://dfinity.org/).
 
 Common representations via [redraw-motoko](https://github.com/matthewhammer/motoko-redraw) package.
 

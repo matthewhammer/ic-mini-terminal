@@ -3,7 +3,7 @@ extern crate delay;
 extern crate futures;
 extern crate ic_agent;
 extern crate ic_types;
-extern crate icgt;
+extern crate icmt;
 extern crate num_traits;
 extern crate sdl2;
 extern crate serde;
@@ -36,7 +36,7 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tokio::task;
 
-use icgt::{
+use icmt::{
     keyboard,
     types::{
         event,
@@ -128,53 +128,53 @@ pub enum ServerCall {
 
 /// Errors from the game terminal, or its subcomponents
 #[derive(Debug, Clone)]
-pub enum IcgtError {
+pub enum IcmtError {
     Agent(), /* Clone => Agent(ic_agent::AgentError) */
     String(String),
     Engiffen(), /* Clone => engiffen::Error */
     RingKeyRejected(ring::error::KeyRejected),
     RingUnspecified(ring::error::Unspecified),
 }
-impl std::convert::From<ic_agent::AgentError> for IcgtError {
+impl std::convert::From<ic_agent::AgentError> for IcmtError {
     fn from(_ae: ic_agent::AgentError) -> Self {
-        /*IcgtError::Agent(ae)*/
-        IcgtError::Agent()
+        /*IcmtError::Agent(ae)*/
+        IcmtError::Agent()
     }
 }
 
-impl<T> std::convert::From<std::sync::mpsc::SendError<T>> for IcgtError {
+impl<T> std::convert::From<std::sync::mpsc::SendError<T>> for IcmtError {
     fn from(_s: std::sync::mpsc::SendError<T>) -> Self {
-        IcgtError::String("send error".to_string())
+        IcmtError::String("send error".to_string())
     }
 }
-impl std::convert::From<std::sync::mpsc::RecvError> for IcgtError {
+impl std::convert::From<std::sync::mpsc::RecvError> for IcmtError {
     fn from(_s: std::sync::mpsc::RecvError) -> Self {
-        IcgtError::String("recv error".to_string())
+        IcmtError::String("recv error".to_string())
     }
 }
-impl std::convert::From<std::io::Error> for IcgtError {
+impl std::convert::From<std::io::Error> for IcmtError {
     fn from(_s: std::io::Error) -> Self {
-        IcgtError::String("IO error".to_string())
+        IcmtError::String("IO error".to_string())
     }
 }
-impl std::convert::From<String> for IcgtError {
+impl std::convert::From<String> for IcmtError {
     fn from(s: String) -> Self {
-        IcgtError::String(s)
+        IcmtError::String(s)
     }
 }
-impl std::convert::From<ring::error::KeyRejected> for IcgtError {
+impl std::convert::From<ring::error::KeyRejected> for IcmtError {
     fn from(r: ring::error::KeyRejected) -> Self {
-        IcgtError::RingKeyRejected(r)
+        IcmtError::RingKeyRejected(r)
     }
 }
-impl std::convert::From<ring::error::Unspecified> for IcgtError {
+impl std::convert::From<ring::error::Unspecified> for IcmtError {
     fn from(r: ring::error::Unspecified) -> Self {
-        IcgtError::RingUnspecified(r)
+        IcmtError::RingUnspecified(r)
     }
 }
-impl std::convert::From<engiffen::Error> for IcgtError {
+impl std::convert::From<engiffen::Error> for IcmtError {
     fn from(_e: engiffen::Error) -> Self {
-        IcgtError::Engiffen()
+        IcmtError::Engiffen()
     }
 }
 
@@ -190,9 +190,9 @@ fn init_log(level_filter: log::LevelFilter) {
 const RETRY_PAUSE: Duration = Duration::from_millis(100);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
-pub type IcgtResult<X> = Result<X, IcgtError>;
+pub type IcmtResult<X> = Result<X, IcmtError>;
 
-pub fn create_agent(url: &str) -> IcgtResult<Agent> {
+pub fn create_agent(url: &str) -> IcmtResult<Agent> {
     //use ring::signature::Ed25519KeyPair;
     use ic_agent::agent::AgentConfig;
     use ring::rand::SystemRandom;
@@ -394,7 +394,7 @@ pub fn skip_event(ctx: &ConnectCtx) -> event::EventInfo {
     }
 }
 
-pub fn go_engiffen(cli: &CliOpt, window_dim: &render::Dim, paths: &Vec<String>) -> IcgtResult<()> {
+pub fn go_engiffen(cli: &CliOpt, window_dim: &render::Dim, paths: &Vec<String>) -> IcmtResult<()> {
     if paths.len() > 0 {
         use std::fs::File;
         let images = engiffen::load_images(paths);
@@ -418,7 +418,7 @@ async fn do_view_task(
     cfg: ConnectCfg,
     remote_in: mpsc::Receiver<Option<(render::Dim, Vec<event::EventInfo>)>>,
     remote_out: mpsc::Sender<Option<render::Result>>,
-) -> IcgtResult<()> {
+) -> IcmtResult<()> {
     /* Create our own agent here since we cannot Send it here from the main thread. */
     let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
     let agent = create_agent(&cfg.replica_url)?;
@@ -448,7 +448,7 @@ async fn do_redraw<'a, T1: RenderTarget>(
     file_canvas: &mut Canvas<Surface<'a>>,
     bmp_paths: &mut Vec<String>,
     data: &Option<render::Result>,
-) -> IcgtResult<()> {
+) -> IcmtResult<()> {
     if !cli.no_window {
         redraw(window_canvas, window_dim, data).await?;
     }
@@ -471,7 +471,7 @@ async fn do_update_task(
     cfg: ConnectCfg,
     remote_in: mpsc::Receiver<ServerCall>,
     remote_out: mpsc::Sender<()>,
-) -> IcgtResult<()> {
+) -> IcmtResult<()> {
     /* Create our own agent here since we cannot Send it here from the main thread. */
     let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
     let agent = create_agent(&cfg.replica_url)?;
@@ -490,7 +490,7 @@ async fn do_update_task(
     }
 }
 
-async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
+async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
     let mut window_dim = render::Dim {
         width: Nat::from(320),
         height: Nat::from(240),
@@ -664,7 +664,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
                                 update_out.send(ServerCall::FlushQuit)?;
                                 println!("Done.");
                             }
-                            Err(e) => return Err(IcgtError::String(e.to_string())),
+                            Err(e) => return Err(IcmtError::String(e.to_string())),
                         }
                     };
                     update_requests += 1;
@@ -741,7 +741,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcgtError> {
 
 // to do -- fix hack; refactor to remove Option<_> in return type
 
-pub async fn server_call(ctx: &ConnectCtx, call: ServerCall) -> IcgtResult<Option<render::Result>> {
+pub async fn server_call(ctx: &ConnectCtx, call: ServerCall) -> IcmtResult<Option<render::Result>> {
     if let ServerCall::FlushQuit = call {
         return Ok(None);
     };
@@ -814,18 +814,18 @@ pub async fn server_call(ctx: &ConnectCtx, call: ServerCall) -> IcgtResult<Optio
                 }
                 Err(candid_err) => {
                     error!("Candid decoding error: {:?}", candid_err);
-                    Err(IcgtError::String("decoding error".to_string()))
+                    Err(IcmtError::String("decoding error".to_string()))
                 }
             },
         }
     } else {
         let res = format!("{:?}", blob_res);
         info!("..error result {:?}", res);
-        Err(IcgtError::String("ic-gt error".to_string()))
+        Err(IcmtError::String("ic-gt error".to_string()))
     }
 }
 
-fn main() -> IcgtResult<()> {
+fn main() -> IcmtResult<()> {
     use tokio::runtime::Runtime;
     let mut runtime = Runtime::new().expect("Unable to create a runtime");
 
@@ -843,7 +843,7 @@ fn main() -> IcgtResult<()> {
     match c {
         CliCommand::Completions { shell: s } => {
             // see also: https://clap.rs/effortless-auto-completion/
-            CliOpt::clap().gen_completions_to("icgt", s, &mut io::stdout());
+            CliOpt::clap().gen_completions_to("icmt", s, &mut io::stdout());
             info!("done")
         }
         CliCommand::Connect {

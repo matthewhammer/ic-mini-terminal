@@ -797,7 +797,8 @@ pub async fn server_call(ctx: &ConnectCtx, call: ServerCall) -> IcmtResult<Optio
         match call.clone() {
             ServerCall::FlushQuit => Ok(None),
             ServerCall::Update(_) => Ok(None),
-            ServerCall::View(_, _) => match candid::Decode!(&(*blob_res), render::Result) {
+            ServerCall::View(_, _) =>
+                match candid::Decode!(&(*blob_res), render::Result) {
                 Ok(res) => {
                     if ctx.cfg.cli_opt.log_trace {
                         let mut res_log = format!("{:?}", &res);

@@ -15,7 +15,7 @@ service : {
 }
 ```
 
-For details, see the [full Candid spec](https://github.com/matthewhammer/ic-mini-terminal/blob/master/spec.did), and those for [Candid](https://github.com/dfinity/candid).
+For details, see the [full Candid spec](https://github.com/matthewhammer/ic-mini-terminal/blob/master/service.did), and those for [Candid](https://github.com/dfinity/candid).
 
 ## Building and testing
 

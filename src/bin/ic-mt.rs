@@ -82,10 +82,7 @@ enum CliCommand {
         about = "Generate shell scripts for auto-completions."
     )]
     Completions { shell: Shell },
-    #[structopt(
-        name = "connect",
-        about = "Connect to an IC canister."
-    )]
+    #[structopt(name = "connect", about = "Connect to an IC canister.")]
     Connect {
         replica_url: String,
         canister_id: String,
@@ -401,15 +398,20 @@ pub fn go_engiffen(cli: &CliOpt, window_dim: &render::Dim, paths: &Vec<String>) 
         let gif = engiffen::engiffen(&images, cli.engiffen_frame_rate, engiffen::Quantizer::Naive)?;
         assert_eq!(gif.images.len(), paths.len());
         let path = format!(
-            "{}/screen-{}x{}-{}.gif",
+            "{}/icmt-graphics-{}-{}x{}.gif",
             cli.capture_output_path,
+            Local::now().to_rfc3339(),
             window_dim.width,
-            window_dim.height,
-            Local::now().to_rfc3339()
+            window_dim.height
         );
         let mut output = File::create(&path)?;
         gif.write(&mut output)?;
         println!("Wrote {} frames to {}", paths.len(), path);
+        println!("Removing {} .BMP files...", paths.len());
+        for bmp_file in paths.iter() {
+            std::fs::remove_file(bmp_file)?;
+        }
+        println!("Done: Removed {} .BMP files.", paths.len());
     }
     Ok(())
 }

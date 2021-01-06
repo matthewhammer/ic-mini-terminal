@@ -29,7 +29,7 @@ ron = "*"
 
 [dependencies.candid]
 git = "https://github.com/dfinity/candid"
-branch = "yan/debug"
+branch = "master"
 
 [lib]
 name = "icmt"

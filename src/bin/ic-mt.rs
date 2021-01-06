@@ -82,10 +82,7 @@ enum CliCommand {
         about = "Generate shell scripts for auto-completions."
     )]
     Completions { shell: Shell },
-    #[structopt(
-        name = "connect",
-        about = "Connect to an IC canister."
-    )]
+    #[structopt(name = "connect", about = "Connect to an IC canister.")]
     Connect {
         replica_url: String,
         canister_id: String,
@@ -412,7 +409,7 @@ pub fn go_engiffen(cli: &CliOpt, window_dim: &render::Dim, paths: &Vec<String>) 
         println!("Wrote {} frames to {}", paths.len(), path);
         println!("Removing {} .BMP files...", paths.len());
         for bmp_file in paths.iter() {
-             std::fs::remove_file(bmp_file)?;
+            std::fs::remove_file(bmp_file)?;
         }
         println!("Done: Removed {} .BMP files.", paths.len());
     }
@@ -802,8 +799,7 @@ pub async fn server_call(ctx: &ConnectCtx, call: ServerCall) -> IcmtResult<Optio
         match call.clone() {
             ServerCall::FlushQuit => Ok(None),
             ServerCall::Update(_) => Ok(None),
-            ServerCall::View(_, _) =>
-                match candid::Decode!(&(*blob_res), render::Result) {
+            ServerCall::View(_, _) => match candid::Decode!(&(*blob_res), render::Result) {
                 Ok(res) => {
                     if ctx.cfg.cli_opt.log_trace {
                         let mut res_log = format!("{:?}", &res);

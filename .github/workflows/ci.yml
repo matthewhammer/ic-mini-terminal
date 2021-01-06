@@ -5,7 +5,62 @@ on:
       - master
   pull_request:
 jobs:
-  tests:
+  build_mac_release:
+    name: Release for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            artifact_name: ic-mt
+            asset_name: ic-mt-macos
+    steps:
+    - name: Install stable toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - uses: actions/checkout@v2
+    - name: install_dependencies
+      run: |
+        brew install SDL2
+        brew install rustup
+        rustup-init -y --default-toolchain stable
+    - name: Build
+      run: cargo build --release --locked
+
+  build_linux_release:
+    name: Release for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: ic-mt
+            asset_name: ic-mt-linux64
+    steps:
+    - name: Install stable toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - uses: actions/checkout@v2
+    - name: install_dependencies
+      run: |
+        sudo apt-get install libsdl2-dev
+    - name: Build
+      run: cargo build --release --locked
+    - name: Upload binaries to release
+      uses: svenstaro/upload-release-action@v2
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: target/release/${{ matrix.artifact_name }}
+        asset_name: ${{ matrix.asset_name }}
+        tag: ${{ github.ref }}
+
+  other_tests:
     runs-on: ubuntu-18.04
     steps:
     - uses: actions/checkout@v2

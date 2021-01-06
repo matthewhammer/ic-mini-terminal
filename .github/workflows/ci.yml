@@ -6,7 +6,7 @@ on:
   pull_request:
 jobs:
   build_mac_release:
-    name: Release for ${{ matrix.os }}
+    name: Build ic-mt for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -31,7 +31,7 @@ jobs:
       run: cargo build --release --locked
 
   build_linux_release:
-    name: Release for ${{ matrix.os }}
+    name: Build ic-mt for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -52,15 +52,9 @@ jobs:
         sudo apt-get install libsdl2-dev
     - name: Build
       run: cargo build --release --locked
-    - name: Upload binaries to release
-      uses: svenstaro/upload-release-action@v2
-      with:
-        repo_token: ${{ secrets.GITHUB_TOKEN }}
-        file: target/release/${{ matrix.artifact_name }}
-        asset_name: ${{ matrix.asset_name }}
-        tag: ${{ github.ref }}
 
   other_tests:
+    name: DFX/tool sanity checks
     runs-on: ubuntu-18.04
     steps:
     - uses: actions/checkout@v2

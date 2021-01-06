@@ -2,86 +2,41 @@
 
 Minimal keyboard input (⌨) and graphical output (📺) for programs on the [Internet Computer](https://dfinity.org/).
 
-Common representations via [redraw-motoko](https://github.com/matthewhammer/motoko-redraw) package.
+## Technical spec
+
+The `ic-mt` tool talks to any
+service on the [Internet Computer](https://dfinity.org/) that uses
+the mini-terminal update-view service protocol, given below in Candid syntax (eliding message-type details):
+
+```
+service : {
+  update: (vec EventInfo) -> () oneway;
+  view: (Dim, vec EventInfo) -> (Graphics) query;
+}
+```
+
+For details, see the [full Candid spec](https://github.com/matthewhammer/ic-mini-terminal/blob/master/service.did), and those for [Candid](https://github.com/dfinity/candid).
 
 ## Building and testing
 
-### Prerequisites
+Requirements:
 
+ * Rust and `cargo`
  * `dfx` via the [DFINITY SDK](https://sdk.dfinity.org/docs/quickstart/quickstart.html)
+
+Optionally:
+
+ * [MirrorGarden](https://github.com/matthewhammer/MirrorGarden): A Motoko project that uses this tool.
  * [`vessel` package manager](https://github.com/kritzcreek/vessel) for Motoko.
 
-### Quick starts
+The mini terminal is a Rust project.
 
-See examples:
+We typically use `dfx` to run the Internet Computer services (e.g., within a local replica)
+to run applications for the terminal.
 
- * [Text editor](#text-editor)
- * [Maze game](#maze-game)
+We often write these applications in [Motoko](https://sdk.dfinity.org/docs/language-guide/motoko.html).
 
-#### Text editor
-
-![Text editor screenshot](img/202011121002-TextEdit-ModifierKeys.png)
-
-Run the text edtior demo in a local replica (using `dfx`):
-
-```
-./scripts/textEdit.sh
-```
-
-The script invokes several `dfx` commands, and builds the terminal binary.
-
-Eliding some details, it works in three stages:
-
-1. The first two commands start the replica and create an identifier for the canister:
-
-  ```
-  dfx -vv start --clean --background
-  dfx canister create textEdit
-  ```
-
-2. The next two commands build the canister from Motoko source code and install it into the running replica's state:
-
-  ```
-  dfx build textEdit
-  dfx canister install textEdit
-  ```
-
-3. The final command builds and attaches the (local) terminal process to the (remote) canister running in the replica:
-
-  ```
-  cargo run --release -- connect 127.0.0.1:8000 `dfx canister id textEdit`
-  ```
-
-
-##### Developer notes
-
-- By repeating (only) the `dfx build` and `dfx canister install` steps,
-  one can rebuild and re-install the canister within the same replica process.
-
-- By deleting `.vessel` when some (external) package of Motoko source changes,
-  one triggers a new clone of the (updated) code, and afterward, `dfx build` will incorporate this updated code.
-
-- The local terminal should keep working with the new (`reinstall`ed) canister.
-
-- Re-running the `cargo run` step is needed if one modifies the terminal source code (in Rust).
-
-
-
-
-#### Maze game
-
-![Maze game screenshot](img/mazeGame-202010091214.png)
-
-Invoke the maze game as follows:
-
-```
-./scripts/mazeGame.sh
-```
-
-This script follows the same `dfx`-based scripting template as [`textEdit`](#text-editor), where more details are explained.
-
-
-# Inspired by
+## Inspired by
 
  * [IC-Logo](https://github.com/chenyan2002/ic-logo): A toy [Logo](https://en.wikipedia.org/wiki/Logo_(programming_language))-like language for the Internet Computer.
  * Simple interactive graphics demos and games of [Elm lang](https://elm-lang.org/).

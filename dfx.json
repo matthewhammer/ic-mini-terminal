@@ -1,24 +1,6 @@
 
 {
   "canisters": {
-    "window": {
-      "main": "test/Window.mo"
-    },
-    "fib": {
-      "main": "test/Fib.mo"
-    },
-    "counter": {
-      "main": "test/Counter.mo"
-    },
-    "counter2d": {
-      "main": "test/Counter2D.mo"
-    },
-    "grid": {
-      "main": "test/Grid.mo"
-    },
-    "mazeGame": {
-      "main": "examples/mazeGame/Main.mo"
-    },
     "textEdit": {
       "main": "examples/textEdit/Main.mo"
     }

@@ -5,8 +5,8 @@ Minimal keyboard input (⌨) and graphical output (📺) for programs on the [In
 ## Technical spec
 
 The `ic-mt` tool talks to any
-[Internet Computer service]() that uses its
-update-view service protocol, given below in Candid syntax (eliding details):
+service on the [Internet Computer](https://dfinity.org/) that uses
+the mini-terminal update-view service protocol, given below in Candid syntax (eliding message-type details):
 
 ```
 service : {

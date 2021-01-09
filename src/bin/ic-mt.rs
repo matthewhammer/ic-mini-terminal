@@ -362,17 +362,16 @@ pub fn go_engiffen(
         let images = engiffen::load_images(bmp_paths);
         let gif = engiffen::engiffen(&images, cli.engiffen_frame_rate, engiffen::Quantizer::Naive)?;
         assert_eq!(gif.images.len(), bmp_paths.len());
+        let local_time = Local::now().to_rfc3339();
         {
             let events_path = format!(
                 "{}/icmt-{}-{}x{}-events.did",
-                cli.capture_output_path,
-                Local::now().to_rfc3339(),
-                window_dim.width,
-                window_dim.height
+                cli.capture_output_path, local_time, window_dim.width, window_dim.height
             );
             let mut output = File::create(&events_path)?;
             let events_bytes = Encode!(&events)?;
-            output.write(&events_bytes)?;
+            let events_hex = hex::encode(&events_bytes);
+            output.write(&events_hex.as_bytes())?;
             println!(
                 "Wrote {} events as {} bytes to {}",
                 events.len(),
@@ -383,10 +382,7 @@ pub fn go_engiffen(
         {
             let graphics_path = format!(
                 "{}/icmt-{}-{}x{}-graphics.gif",
-                cli.capture_output_path,
-                Local::now().to_rfc3339(),
-                window_dim.width,
-                window_dim.height
+                cli.capture_output_path, local_time, window_dim.width, window_dim.height
             );
             let mut output = File::create(&graphics_path)?;
             gif.write(&mut output)?;

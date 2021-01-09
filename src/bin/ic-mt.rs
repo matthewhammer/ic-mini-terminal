@@ -20,9 +20,10 @@ use clap::Shell;
 extern crate structopt;
 use structopt::StructOpt;
 
-use candid::Decode;
+use candid::{Decode, Encode};
 use ic_agent::Agent;
 use ic_types::Principal;
+use std::io::Write;
 
 use candid::Nat;
 use chrono::prelude::*;
@@ -37,6 +38,7 @@ use std::time::Duration;
 use tokio::task;
 
 use icmt::{
+    error::*,
     keyboard,
     types::{
         event,
@@ -121,58 +123,6 @@ pub enum ServerCall {
     Update(Vec<event::EventInfo>),
     // To process user request to quit interaction
     FlushQuit,
-}
-
-/// Errors from the mini terminal, or its subcomponents
-#[derive(Debug, Clone)]
-pub enum IcmtError {
-    Agent(), /* Clone => Agent(ic_agent::AgentError) */
-    String(String),
-    Engiffen(), /* Clone => engiffen::Error */
-    RingKeyRejected(ring::error::KeyRejected),
-    RingUnspecified(ring::error::Unspecified),
-}
-impl std::convert::From<ic_agent::AgentError> for IcmtError {
-    fn from(_ae: ic_agent::AgentError) -> Self {
-        /*IcmtError::Agent(ae)*/
-        IcmtError::Agent()
-    }
-}
-
-impl<T> std::convert::From<std::sync::mpsc::SendError<T>> for IcmtError {
-    fn from(_s: std::sync::mpsc::SendError<T>) -> Self {
-        IcmtError::String("send error".to_string())
-    }
-}
-impl std::convert::From<std::sync::mpsc::RecvError> for IcmtError {
-    fn from(_s: std::sync::mpsc::RecvError) -> Self {
-        IcmtError::String("recv error".to_string())
-    }
-}
-impl std::convert::From<std::io::Error> for IcmtError {
-    fn from(_s: std::io::Error) -> Self {
-        IcmtError::String("IO error".to_string())
-    }
-}
-impl std::convert::From<String> for IcmtError {
-    fn from(s: String) -> Self {
-        IcmtError::String(s)
-    }
-}
-impl std::convert::From<ring::error::KeyRejected> for IcmtError {
-    fn from(r: ring::error::KeyRejected) -> Self {
-        IcmtError::RingKeyRejected(r)
-    }
-}
-impl std::convert::From<ring::error::Unspecified> for IcmtError {
-    fn from(r: ring::error::Unspecified) -> Self {
-        IcmtError::RingUnspecified(r)
-    }
-}
-impl std::convert::From<engiffen::Error> for IcmtError {
-    fn from(_e: engiffen::Error) -> Self {
-        IcmtError::Engiffen()
-    }
 }
 
 fn init_log(level_filter: log::LevelFilter) {
@@ -311,8 +261,18 @@ pub fn draw_elm<T: RenderTarget>(
     }
 }
 
-fn translate_system_event(event: &SysEvent) -> Option<event::Event> {
+fn translate_system_event(
+    video_subsystem: &sdl2::VideoSubsystem,
+    event: &SysEvent,
+) -> Option<event::Event> {
     match event {
+        SysEvent::ClipboardUpdate { .. } => {
+            let text = match video_subsystem.clipboard().clipboard_text() {
+                Ok(text) => text,
+                Err(text) => format!("error: {}", text),
+            };
+            Some(event::Event::ClipBoard(text))
+        }
         SysEvent::Window {
             win_event: WindowEvent::SizeChanged(w, h),
             ..
@@ -391,27 +351,56 @@ pub fn skip_event(ctx: &ConnectCtx) -> event::EventInfo {
     }
 }
 
-pub fn go_engiffen(cli: &CliOpt, window_dim: &render::Dim, paths: &Vec<String>) -> IcmtResult<()> {
-    if paths.len() > 0 {
+pub fn go_engiffen(
+    cli: &CliOpt,
+    window_dim: &render::Dim,
+    events: Vec<event::EventInfo>,
+    bmp_paths: &Vec<String>,
+) -> IcmtResult<()> {
+    if bmp_paths.len() > 0 {
         use std::fs::File;
-        let images = engiffen::load_images(paths);
+        let images = engiffen::load_images(bmp_paths);
         let gif = engiffen::engiffen(&images, cli.engiffen_frame_rate, engiffen::Quantizer::Naive)?;
-        assert_eq!(gif.images.len(), paths.len());
-        let path = format!(
-            "{}/icmt-graphics-{}-{}x{}.gif",
-            cli.capture_output_path,
-            Local::now().to_rfc3339(),
-            window_dim.width,
-            window_dim.height
-        );
-        let mut output = File::create(&path)?;
-        gif.write(&mut output)?;
-        println!("Wrote {} frames to {}", paths.len(), path);
-        println!("Removing {} .BMP files...", paths.len());
-        for bmp_file in paths.iter() {
-            std::fs::remove_file(bmp_file)?;
+        assert_eq!(gif.images.len(), bmp_paths.len());
+        {
+            let events_path = format!(
+                "{}/icmt-{}-{}x{}-events.did",
+                cli.capture_output_path,
+                Local::now().to_rfc3339(),
+                window_dim.width,
+                window_dim.height
+            );
+            let mut output = File::create(&events_path)?;
+            let events_bytes = Encode!(&events)?;
+            output.write(&events_bytes)?;
+            println!(
+                "Wrote {} events as {} bytes to {}",
+                events.len(),
+                events_bytes.len(),
+                events_path
+            );
         }
-        println!("Done: Removed {} .BMP files.", paths.len());
+        {
+            let graphics_path = format!(
+                "{}/icmt-{}-{}x{}-graphics.gif",
+                cli.capture_output_path,
+                Local::now().to_rfc3339(),
+                window_dim.width,
+                window_dim.height
+            );
+            let mut output = File::create(&graphics_path)?;
+            gif.write(&mut output)?;
+            println!(
+                "Wrote {} graphics frames to {}",
+                bmp_paths.len(),
+                graphics_path
+            );
+            println!("Removing {} .BMP files...", bmp_paths.len());
+            for bmp_file in bmp_paths.iter() {
+                std::fs::remove_file(bmp_file)?;
+            }
+            println!("Done: Removed {} .BMP files.", bmp_paths.len());
+        }
     }
     Ok(())
 }
@@ -533,6 +522,8 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
 
     let mut view_events = vec![];
     let mut update_events = vec![];
+
+    let mut dump_events = vec![];
     let mut engiffen_paths = vec![];
 
     let (update_in, update_out) = /* Begin update task */ {
@@ -591,7 +582,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
     'running: loop {
         if let Some(system_event) = event_pump.wait_event_timeout(13) {
             // utc/local timestamps for event
-            let event = translate_system_event(&system_event);
+            let event = translate_system_event(&video_subsystem, &system_event);
             let event = match event {
                 None => continue 'running,
                 Some(event) => event,
@@ -606,16 +597,39 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                     // ignore
                 }
                 event::Event::Quit => {
-                    debug!("Quit");
+                    info!("Quit");
                     println!("Begin: Quitting...");
                     println!("Waiting for next update response...");
                     quit_request = true;
                 }
-                event::Event::WindowSize(new_dim) => {
-                    debug!("WindowSize {:?}", new_dim);
+                event::Event::ClipBoard(text) => {
+                    info!("ClipBoard: {}", text);
                     dirty_flag = true;
                     view_events.push(skip_event(&ctx));
-                    go_engiffen(&ctx.cfg.cli_opt, &window_dim, &engiffen_paths)?;
+                    dump_events.push(skip_event(&ctx));
+                    let ev = event::EventInfo {
+                        user_info: event::UserInfo {
+                            user_name: ctx.cfg.user_info.0.clone(),
+                            text_color: (
+                                ctx.cfg.user_info.1.clone(),
+                                (Nat::from(0), Nat::from(0), Nat::from(0)),
+                            ),
+                        },
+                        nonce: None,
+                        date_time_local: Local::now().to_rfc3339(),
+                        date_time_utc: Utc::now().to_rfc3339(),
+                        event: event::Event::ClipBoard(text),
+                    };
+                    view_events.push(ev.clone());
+                    dump_events.push(ev);
+                }
+                event::Event::WindowSize(new_dim) => {
+                    info!("WindowSize {:?}", new_dim);
+                    dirty_flag = true;
+                    view_events.push(skip_event(&ctx));
+                    dump_events.push(skip_event(&ctx));
+                    go_engiffen(&ctx.cfg.cli_opt, &window_dim, dump_events, &engiffen_paths)?;
+                    dump_events = vec![];
                     engiffen_paths = vec![];
                     window_dim = new_dim;
                     // to do -- add event to buffer, and send to server
@@ -630,9 +644,9 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                     };
                 }
                 event::Event::KeyDown(ref keys) => {
-                    debug!("KeyDown {:?}", keys);
+                    info!("KeyDown {:?}", keys);
                     dirty_flag = true;
-                    view_events.push(event::EventInfo {
+                    let ev = event::EventInfo {
                         user_info: event::UserInfo {
                             user_name: ctx.cfg.user_info.0.clone(),
                             text_color: (
@@ -644,7 +658,9 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                         date_time_local: Local::now().to_rfc3339(),
                         date_time_utc: Utc::now().to_rfc3339(),
                         event: event::Event::KeyDown(keys.clone()),
-                    });
+                    };
+                    view_events.push(ev.clone());
+                    dump_events.push(ev);
                 }
             }
         };
@@ -691,7 +707,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
         };
 
         if quit_request {
-            go_engiffen(&ctx.cfg.cli_opt, &window_dim, &engiffen_paths)?;
+            go_engiffen(&ctx.cfg.cli_opt, &window_dim, dump_events, &engiffen_paths)?;
             {
                 print!("Stopping view task... ");
                 view_out.send(None)?;

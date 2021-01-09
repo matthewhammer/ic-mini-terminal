@@ -3,6 +3,12 @@ name = "icmt"
 version = "0.1.0"
 authors = ["Matthew A Hammer <pubmah@nym.hush.com>"]
 edition = "2018"
+description = "The Internet Computer Mini Terminal.  Live input and output for IC canisters."
+homepage = "https://docs.rs/icmt"
+documentation = "https://docs.rs/icmt"
+repository = "https://github.com/matthewhammer/ic-mini-terminal"
+license = "Apache-2.0"
+readme = "README.md"
 
 [dependencies]
 chrono = "0.4"
@@ -14,7 +20,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_bytes = "0.11"
 serde_cbor = "0.9"
 serde_json = "1.0"
-sdl2 = "0.32"
+sdl2 = "0.34.3"
 tokio = "0.2.22"
 delay = "0.3.0"
 num-bigint = "0.2.6"

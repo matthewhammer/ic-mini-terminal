@@ -72,6 +72,8 @@ pub mod event {
         MouseDown(super::render::Pos),
         #[serde(rename(serialize = "windowSize"))]
         WindowSize(super::render::Dim),
+        #[serde(rename(serialize = "clipBoard"))]
+        ClipBoard(String),
     }
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub struct KeyEventInfo {

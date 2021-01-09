@@ -3,6 +3,12 @@ name = "icmt"
 version = "0.1.0"
 authors = ["Matthew A Hammer <pubmah@nym.hush.com>"]
 edition = "2018"
+description = "The Internet Computer Mini Terminal.  Live input and output for IC canisters."
+homepage = "https://docs.rs/icmt"
+documentation = "https://docs.rs/icmt"
+repository = "https://github.com/matthewhammer/ic-mini-terminal"
+license = "Apache-2.0"
+readme = "README.md"
 
 [dependencies]
 chrono = "0.4"

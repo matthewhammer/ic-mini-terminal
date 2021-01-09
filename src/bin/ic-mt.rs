@@ -605,8 +605,6 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                 event::Event::ClipBoard(text) => {
                     info!("ClipBoard: {}", text);
                     dirty_flag = true;
-                    view_events.push(skip_event(&ctx));
-                    dump_events.push(skip_event(&ctx));
                     let ev = event::EventInfo {
                         user_info: event::UserInfo {
                             user_name: ctx.cfg.user_info.0.clone(),

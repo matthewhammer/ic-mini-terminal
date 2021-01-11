@@ -1,3 +1,5 @@
+//! Keyboard events.
+
 use sdl2::keyboard::Keycode;
 use sdl2::keyboard::Mod;
 

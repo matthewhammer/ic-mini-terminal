@@ -1,0 +1,10 @@
+     608    1675   21471 src/bin/ic-mt.rs
+     247     750    7417 src/lib/types.rs
+      63     180    1934 src/lib/error.rs
+       9      24     234 src/lib/color.rs
+      57     140    1965 src/lib/write.rs
+     135     349    3748 src/lib/draw.rs
+      18      58     378 src/lib/mod.rs
+     103     727    5587 src/lib/keyboard.rs
+      70     267    2291 src/lib/cli.rs
+    1310    4170   45025 total

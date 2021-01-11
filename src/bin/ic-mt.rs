@@ -1,4 +1,3 @@
-//extern crate hashcons;
 extern crate delay;
 extern crate futures;
 extern crate ic_agent;
@@ -7,123 +6,39 @@ extern crate icmt;
 extern crate num_traits;
 extern crate sdl2;
 extern crate serde;
-
-// Logging:
 #[macro_use]
 extern crate log;
-extern crate env_logger;
-
-// CLI: Representation and processing:
 extern crate clap;
-use clap::Shell;
+extern crate env_logger;
 
 extern crate structopt;
 use structopt::StructOpt;
 
-use candid::{Decode, Encode};
+use candid::Decode;
 use ic_agent::Agent;
 use ic_types::Principal;
-use std::io::Write;
 
 use candid::Nat;
 use chrono::prelude::*;
 use delay::Delay;
-use num_traits::cast::ToPrimitive;
 use sdl2::event::Event as SysEvent; // not to be confused with our own definition
 use sdl2::event::WindowEvent;
 use sdl2::keyboard::Keycode;
+use sdl2::render::{Canvas, RenderTarget};
+use sdl2::surface::Surface;
 use std::io;
 use std::sync::mpsc;
 use std::time::Duration;
 use tokio::task;
 
 use icmt::{
+    cli::*,
+    draw::*,
     error::*,
     keyboard,
-    types::{
-        event,
-        render::{self, Elm, Fill},
-    },
+    types::{event, graphics, nat_ceil, skip_event, ServiceCall, UserInfoCli},
+    write::write_gifs,
 };
-use sdl2::render::{Canvas, RenderTarget};
-use sdl2::surface::Surface;
-
-/// Internet Computer Mini Terminal (ic-mt)
-#[derive(StructOpt, Debug, Clone)]
-#[structopt(name = "ic-mt", raw(setting = "clap::AppSettings::DeriveDisplayOrder"))]
-pub struct CliOpt {
-    /// Path for output files with event and screen captures.
-    #[structopt(short = "o", long = "out", default_value = "./out")]
-    capture_output_path: String,
-    /// Frame rate (uniform) for producing captured GIF files with engiffen.
-    #[structopt(long = "engiffen-framerate", default_value = "16")]
-    engiffen_frame_rate: usize,
-    /// Suppress window for graphics output.
-    #[structopt(short = "W", long = "no-window")]
-    no_window: bool,
-    /// Suppress capturing graphics output.
-    #[structopt(short = "C", long = "no-capture")]
-    no_capture: bool,
-    /// Trace-level logging (most verbose)
-    #[structopt(short = "t", long = "trace-log")]
-    log_trace: bool,
-    /// Debug-level logging (medium verbose)
-    #[structopt(short = "d", long = "debug-log")]
-    log_debug: bool,
-    /// Coarse logging information (not verbose)
-    #[structopt(short = "L", long = "log")]
-    log_info: bool,
-    #[structopt(subcommand)]
-    command: CliCommand,
-}
-
-#[derive(StructOpt, Debug, Clone)]
-enum CliCommand {
-    #[structopt(
-        name = "completions",
-        about = "Generate shell scripts for auto-completions."
-    )]
-    Completions { shell: Shell },
-    #[structopt(name = "connect", about = "Connect to an IC canister.")]
-    Connect {
-        replica_url: String,
-        canister_id: String,
-        /// Initialization arguments, as a Candid textual value (default is empty tuple).
-        #[structopt(short = "i", long = "user")]
-        user_info_text: String,
-    },
-}
-
-/// Connection context: IC agent object, for server calls, and configuration info.
-pub struct ConnectCtx {
-    cfg: ConnectCfg,
-    agent: Agent,
-    canister_id: Principal,
-}
-
-/// Connection configuration
-#[derive(Debug, Clone)]
-pub struct ConnectCfg {
-    cli_opt: CliOpt,
-    canister_id: String,
-    replica_url: String,
-    /// temp hack: username and user-chosen color
-    user_info: UserInfo,
-}
-
-/// temp hack: username and user-chosen color
-pub type UserInfo = (String, (Nat, Nat, Nat));
-
-/// Messages that go from this terminal binary to the server cansiter
-#[derive(Debug, Clone)]
-pub enum ServerCall {
-    // Query a projected view of the remote canister
-    View(render::Dim, Vec<event::EventInfo>),
-    // Update the state of the remote canister
-    Update(Vec<event::EventInfo>),
-    // To process user request to quit interaction
-    FlushQuit,
-}
 
 fn init_log(level_filter: log::LevelFilter) {
     use env_logger::{Builder, WriteStyle};
@@ -136,8 +51,6 @@ fn init_log(level_filter: log::LevelFilter) {
 
 const RETRY_PAUSE: Duration = Duration::from_millis(100);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
-
-pub type IcmtResult<X> = Result<X, IcmtError>;
 
 pub fn create_agent(url: &str) -> IcmtResult<Agent> {
     //use ring::signature::Ed25519KeyPair;
@@ -156,111 +69,6 @@ pub fn create_agent(url: &str) -> IcmtResult<Agent> {
     Ok(agent)
 }
 
-fn nat_ceil(n: &Nat) -> u32 {
-    n.0.to_u32().unwrap()
-}
-
-fn byte_ceil(n: &Nat) -> u8 {
-    match n.0.to_u8() {
-        Some(byte) => byte,
-        None => 255,
-    }
-}
-
-fn translate_color(c: &render::Color) -> sdl2::pixels::Color {
-    match c {
-        (r, g, b) => sdl2::pixels::Color::RGB(byte_ceil(r), byte_ceil(g), byte_ceil(b)),
-    }
-}
-
-fn translate_rect(pos: &render::Pos, r: &render::Rect) -> sdl2::rect::Rect {
-    // todo -- clip the size of the rect dimension by the bound param
-    trace!("translate_rect {:?} {:?}", pos, r);
-    sdl2::rect::Rect::new(
-        nat_ceil(&Nat(&pos.x.0 + &r.pos.x.0)) as i32,
-        nat_ceil(&Nat(&pos.y.0 + &r.pos.y.0)) as i32,
-        nat_ceil(&r.dim.width),
-        nat_ceil(&r.dim.height),
-    )
-}
-
-fn draw_rect<T: RenderTarget>(
-    canvas: &mut Canvas<T>,
-    pos: &render::Pos,
-    r: &render::Rect,
-    f: &render::Fill,
-) {
-    match f {
-        Fill::None => {
-            // no-op.
-        }
-        Fill::Closed(c) => {
-            let r = translate_rect(pos, r);
-            let c = translate_color(c);
-            canvas.set_draw_color(c);
-            canvas.fill_rect(r).unwrap();
-        }
-        Fill::Open(c, _) => {
-            let r = translate_rect(pos, r);
-            let c = translate_color(c);
-            canvas.set_draw_color(c);
-            canvas.draw_rect(r).unwrap();
-        }
-    }
-}
-
-pub fn nat_zero() -> Nat {
-    Nat::from(0)
-}
-
-pub fn draw_rect_elms<T: RenderTarget>(
-    canvas: &mut Canvas<T>,
-    pos: &render::Pos,
-    dim: &render::Dim,
-    fill: &render::Fill,
-    elms: &render::Elms,
-) -> Result<(), String> {
-    draw_rect::<T>(
-        canvas,
-        &pos,
-        &render::Rect::new(
-            nat_zero(),
-            nat_zero(),
-            dim.width.clone(),
-            dim.height.clone(),
-        ),
-        fill,
-    );
-    for elm in elms.iter() {
-        draw_elm(canvas, pos, elm)?
-    }
-    Ok(())
-}
-
-pub fn draw_elm<T: RenderTarget>(
-    canvas: &mut Canvas<T>,
-    pos: &render::Pos,
-    elm: &render::Elm,
-) -> Result<(), String> {
-    match &elm {
-        &Elm::Node(node) => {
-            let pos = render::Pos {
-                x: Nat(&pos.x.0 + &node.rect.pos.x.0),
-                y: Nat(&pos.y.0 + &node.rect.pos.y.0),
-            };
-            draw_rect_elms(canvas, &pos, &node.rect.dim, &node.fill, &node.elms)
-        }
-        &Elm::Rect(r, f) => {
-            draw_rect(canvas, pos, r, f);
-            Ok(())
-        }
-        &Elm::Text(t, ta) => {
-            warn!("to do {:?} {:?}", t, ta);
-            Ok(())
-        }
-    }
-}
-
 fn translate_system_event(
     video_subsystem: &sdl2::VideoSubsystem,
     event: &SysEvent,
@@ -277,7 +85,7 @@ fn translate_system_event(
             win_event: WindowEvent::SizeChanged(w, h),
             ..
         } => {
-            let dim = render::Dim {
+            let dim = graphics::Dim {
                 width: Nat::from(*w as u64),
                 height: Nat::from(*h as u64),
             };
@@ -300,111 +108,36 @@ fn translate_system_event(
     }
 }
 
-pub async fn redraw<T: RenderTarget>(
-    canvas: &mut Canvas<T>,
-    dim: &render::Dim,
-    rr: &Option<render::Result>,
-) -> Result<(), String> {
-    let pos = render::Pos {
-        x: nat_zero(),
-        y: nat_zero(),
-    };
-    let fill = render::Fill::Closed((nat_zero(), nat_zero(), nat_zero()));
-    match rr {
-        Some(render::Result::Ok(render::Out::Draw(elm))) => {
-            draw_rect_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
-        }
-        Some(render::Result::Ok(render::Out::Redraw(elms))) => {
-            if elms.len() == 1 && elms[0].0 == "screen" {
-                draw_rect_elms(canvas, &pos, dim, &fill, &vec![elms[0].1.clone()])?;
-            } else {
-                warn!("unrecognized redraw elements {:?}", elms);
-            }
-        }
-        Some(render::Result::Err(render::Out::Draw(elm))) => {
-            draw_rect_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
-        }
-        _ => unimplemented!(),
-    };
-    canvas.present();
-    // to do -- if enabled, dump canvas as .BMP file to next output image file in the stream that we are producing
-    // https://docs.rs/sdl2/0.34.3/sdl2/render/struct.Canvas.html#method.into_surface
-    // https://docs.rs/sdl2/0.34.3/sdl2/surface/struct.Surface.html#method.save_bmp
-    Ok(())
-}
-
-// skip events just have meta info, needed for _customized_ (per-user) views.
-// alternatively, the "event" corresponding to getting the current view is the Skip event.
-pub fn skip_event(ctx: &ConnectCtx) -> event::EventInfo {
-    event::EventInfo {
-        user_info: event::UserInfo {
-            user_name: ctx.cfg.user_info.0.clone(),
-            text_color: (
-                ctx.cfg.user_info.1.clone(),
-                (Nat::from(0), Nat::from(0), Nat::from(0)),
-            ),
-        },
-        nonce: None,
-        date_time_local: Local::now().to_rfc3339(),
-        date_time_utc: Utc::now().to_rfc3339(),
-        event: event::Event::Skip,
-    }
-}
-
-pub fn go_engiffen(
+async fn do_redraw<'a, T1: RenderTarget>(
     cli: &CliOpt,
-    window_dim: &render::Dim,
-    events: Vec<event::EventInfo>,
-    bmp_paths: &Vec<String>,
+    window_dim: &graphics::Dim,
+    window_canvas: &mut Canvas<T1>,
+    file_canvas: &mut Canvas<Surface<'a>>,
+    bmp_paths: &mut Vec<String>,
+    data: &Option<graphics::Result>,
 ) -> IcmtResult<()> {
-    if bmp_paths.len() > 0 {
-        use std::fs::File;
-        let images = engiffen::load_images(bmp_paths);
-        let gif = engiffen::engiffen(&images, cli.engiffen_frame_rate, engiffen::Quantizer::Naive)?;
-        assert_eq!(gif.images.len(), bmp_paths.len());
-        let local_time = Local::now().to_rfc3339();
-        {
-            let events_path = format!(
-                "{}/icmt-{}-{}x{}-events.did",
-                cli.capture_output_path, local_time, window_dim.width, window_dim.height
-            );
-            let mut output = File::create(&events_path)?;
-            let events_bytes = Encode!(&events)?;
-            let events_hex = hex::encode(&events_bytes);
-            output.write(&events_hex.as_bytes())?;
-            println!(
-                "Wrote {} events as {} bytes to {}",
-                events.len(),
-                events_bytes.len(),
-                events_path
-            );
-        }
-        {
-            let graphics_path = format!(
-                "{}/icmt-{}-{}x{}-graphics.gif",
-                cli.capture_output_path, local_time, window_dim.width, window_dim.height
-            );
-            let mut output = File::create(&graphics_path)?;
-            gif.write(&mut output)?;
-            println!(
-                "Wrote {} graphics frames to {}",
-                bmp_paths.len(),
-                graphics_path
-            );
-            println!("Removing {} .BMP files...", bmp_paths.len());
-            for bmp_file in bmp_paths.iter() {
-                std::fs::remove_file(bmp_file)?;
-            }
-            println!("Done: Removed {} .BMP files.", bmp_paths.len());
-        }
+    if !cli.no_window {
+        draw(window_canvas, window_dim, data).await?;
+    }
+    if !cli.no_capture {
+        draw(file_canvas, window_dim, data).await?;
+        let path = format!(
+            "{}/screen-{}x{}-{}.bmp",
+            cli.capture_output_path,
+            window_dim.width,
+            window_dim.height,
+            Local::now().to_rfc3339()
+        );
+        file_canvas.surface().save_bmp(&path)?;
+        bmp_paths.push(path);
     }
     Ok(())
 }
 
 async fn do_view_task(
     cfg: ConnectCfg,
-    remote_in: mpsc::Receiver<Option<(render::Dim, Vec<event::EventInfo>)>>,
-    remote_out: mpsc::Sender<Option<render::Result>>,
+    remote_in: mpsc::Receiver<Option<(graphics::Dim, Vec<event::EventInfo>)>>,
+    remote_out: mpsc::Sender<Option<graphics::Result>>,
 ) -> IcmtResult<()> {
     /* Create our own agent here since we cannot Send it here from the main thread. */
     let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
@@ -421,42 +154,16 @@ async fn do_view_task(
         match events {
             None => return Ok(()),
             Some((window_dim, events)) => {
-                let rr = server_call(&ctx, ServerCall::View(window_dim, events)).await?;
+                let rr = service_call(&ctx, ServiceCall::View(window_dim, events)).await?;
                 remote_out.send(rr)?;
             }
         }
     }
 }
 
-async fn do_redraw<'a, T1: RenderTarget>(
-    cli: &CliOpt,
-    window_dim: &render::Dim,
-    window_canvas: &mut Canvas<T1>,
-    file_canvas: &mut Canvas<Surface<'a>>,
-    bmp_paths: &mut Vec<String>,
-    data: &Option<render::Result>,
-) -> IcmtResult<()> {
-    if !cli.no_window {
-        redraw(window_canvas, window_dim, data).await?;
-    }
-    if !cli.no_capture {
-        redraw(file_canvas, window_dim, data).await?;
-        let path = format!(
-            "{}/screen-{}x{}-{}.bmp",
-            cli.capture_output_path,
-            window_dim.width,
-            window_dim.height,
-            Local::now().to_rfc3339()
-        );
-        file_canvas.surface().save_bmp(&path)?;
-        bmp_paths.push(path);
-    }
-    Ok(())
-}
-
 async fn do_update_task(
     cfg: ConnectCfg,
-    remote_in: mpsc::Receiver<ServerCall>,
+    remote_in: mpsc::Receiver<ServiceCall>,
     remote_out: mpsc::Sender<()>,
 ) -> IcmtResult<()> {
     /* Create our own agent here since we cannot Send it here from the main thread. */
@@ -469,16 +176,16 @@ async fn do_update_task(
     };
     loop {
         let sc = remote_in.recv().unwrap();
-        if let ServerCall::FlushQuit = sc {
+        if let ServiceCall::FlushQuit = sc {
             return Ok(());
         };
-        server_call(&ctx, sc).await?;
+        service_call(&ctx, sc).await?;
         remote_out.send(()).unwrap();
     }
 }
 
 async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
-    let mut window_dim = render::Dim {
+    let mut window_dim = graphics::Dim {
         width: Nat::from(320),
         height: Nat::from(240),
     }; // use CLI to init
@@ -527,14 +234,14 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
 
         // Interaction cycle as two halves (local/remote); each half is a thread.
         // There are four end points along the cycle's halves:
-        let (local_out, remote_in) = mpsc::channel::<ServerCall>();
+        let (local_out, remote_in) = mpsc::channel::<ServiceCall>();
         let (remote_out, local_in) = mpsc::channel::<()>();
 
-        // 1. Remote interactions via update calls to server.
+        // 1. Remote interactions via update calls to service.
         // (Consumes remote_in and produces remote_out).
 
         task::spawn(do_update_task(cfg, remote_in, remote_out));
-        local_out.send(ServerCall::Update(vec![skip_event(&ctx)]))?;
+        local_out.send(ServiceCall::Update(vec![skip_event(&ctx)]))?;
         (local_in, local_out)
     };
 
@@ -543,10 +250,10 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
 
         // Interaction cycle as two halves (local/remote); each half is a thread.
         // There are four end points along the cycle's halves:
-        let (local_out, remote_in) = mpsc::channel::<Option<(render::Dim, Vec<event::EventInfo>)>>();
-        let (remote_out, local_in) = mpsc::channel::<Option<render::Result>>();
+        let (local_out, remote_in) = mpsc::channel::<Option<(graphics::Dim, Vec<event::EventInfo>)>>();
+        let (remote_out, local_in) = mpsc::channel::<Option<graphics::Result>>();
 
-        // 1. Remote interactions via view calls to server.
+        // 1. Remote interactions via view calls to service.
         // (Consumes remote_in and produces remote_out).
 
         task::spawn(do_view_task(cfg, remote_in, remote_out));
@@ -622,11 +329,11 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                     dirty_flag = true;
                     view_events.push(skip_event(&ctx));
                     dump_events.push(skip_event(&ctx));
-                    go_engiffen(&ctx.cfg.cli_opt, &window_dim, dump_events, &engiffen_paths)?;
+                    write_gifs(&ctx.cfg.cli_opt, &window_dim, dump_events, &engiffen_paths)?;
                     dump_events = vec![];
                     engiffen_paths = vec![];
                     window_dim = new_dim;
-                    // to do -- add event to buffer, and send to server
+                    // to do -- add event to buffer, and send to service
                     file_canvas = {
                         // Re-size canvas by re-creating it.
                         let surface = sdl2::surface::Surface::new(
@@ -666,14 +373,14 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                     update_responses += 1;
                     info!("update_responses = {}", update_responses);
                     update_out
-                        .send(ServerCall::Update(view_events.clone()))
+                        .send(ServiceCall::Update(view_events.clone()))
                         .unwrap();
                     if quit_request {
                         println!("Continue: Quitting...");
                         println!("Waiting for final update-task response.");
                         match update_in.try_recv() {
                             Ok(()) => {
-                                update_out.send(ServerCall::FlushQuit)?;
+                                update_out.send(ServiceCall::FlushQuit)?;
                                 println!("Done.");
                             }
                             Err(e) => return Err(IcmtError::String(e.to_string())),
@@ -690,7 +397,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                         println!("Continue: Quitting...");
                         println!("Waiting for final update-task response.");
                         update_in.recv()?;
-                        update_out.send(ServerCall::FlushQuit)?;
+                        update_out.send(ServiceCall::FlushQuit)?;
                         println!("Done.");
                     } else {
                         /* not ready; do nothing */
@@ -701,7 +408,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
         };
 
         if quit_request {
-            go_engiffen(&ctx.cfg.cli_opt, &window_dim, dump_events, &engiffen_paths)?;
+            write_gifs(&ctx.cfg.cli_opt, &window_dim, dump_events, &engiffen_paths)?;
             {
                 print!("Stopping view task... ");
                 view_out.send(None)?;
@@ -752,13 +459,15 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
 }
 
 // to do -- fix hack; refactor to remove Option<_> in return type
-
-pub async fn server_call(ctx: &ConnectCtx, call: ServerCall) -> IcmtResult<Option<render::Result>> {
-    if let ServerCall::FlushQuit = call {
+pub async fn service_call(
+    ctx: &ConnectCtx,
+    call: ServiceCall,
+) -> IcmtResult<Option<graphics::Result>> {
+    if let ServiceCall::FlushQuit = call {
         return Ok(None);
     };
     debug!(
-        "server_call: to canister_id {:?} at replica_url {:?}",
+        "service_call: to canister_id {:?} at replica_url {:?}",
         ctx.cfg.canister_id, ctx.cfg.replica_url
     );
     let delay = Delay::builder()
@@ -766,21 +475,21 @@ pub async fn server_call(ctx: &ConnectCtx, call: ServerCall) -> IcmtResult<Optio
         .timeout(REQUEST_TIMEOUT)
         .build();
     let timestamp = std::time::SystemTime::now();
-    info!("server_call: {:?}", call);
+    info!("service_call: {:?}", call);
     let arg_bytes = match call.clone() {
-        ServerCall::FlushQuit => candid::encode_args(()).unwrap(),
-        ServerCall::View(window_dim, evs) => candid::encode_args((window_dim, evs)).unwrap(),
-        ServerCall::Update(evs) => candid::encode_args((evs,)).unwrap(),
+        ServiceCall::FlushQuit => candid::encode_args(()).unwrap(),
+        ServiceCall::View(window_dim, evs) => candid::encode_args((window_dim, evs)).unwrap(),
+        ServiceCall::Update(evs) => candid::encode_args((evs,)).unwrap(),
     };
     info!(
-        "server_call: Encoded argument via Candid; Arg size {:?} bytes",
+        "service_call: Encoded argument via Candid; Arg size {:?} bytes",
         arg_bytes.len()
     );
-    info!("server_call: Awaiting response from server...");
-    // do an update or query call, based on the ServerCall case:
+    info!("service_call: Awaiting response from service...");
+    // do an update or query call, based on the ServiceCall case:
     let blob_res = match call.clone() {
-        ServerCall::FlushQuit => None,
-        ServerCall::View(_window_dim, _keys) => {
+        ServiceCall::FlushQuit => None,
+        ServiceCall::View(_window_dim, _keys) => {
             let resp = ctx
                 .agent
                 .query(&ctx.canister_id, "view")
@@ -789,7 +498,7 @@ pub async fn server_call(ctx: &ConnectCtx, call: ServerCall) -> IcmtResult<Optio
                 .await?;
             Some(resp)
         }
-        ServerCall::Update(_keys) => {
+        ServiceCall::Update(_keys) => {
             let resp = ctx
                 .agent
                 .update(&ctx.canister_id, "update")
@@ -802,14 +511,14 @@ pub async fn server_call(ctx: &ConnectCtx, call: ServerCall) -> IcmtResult<Optio
     let elapsed = timestamp.elapsed().unwrap();
     if let Some(blob_res) = blob_res {
         info!(
-            "server_call: Ok: Response size {:?} bytes; elapsed time {:?}",
+            "service_call: Ok: Response size {:?} bytes; elapsed time {:?}",
             blob_res.len(),
             elapsed
         );
         match call.clone() {
-            ServerCall::FlushQuit => Ok(None),
-            ServerCall::Update(_) => Ok(None),
-            ServerCall::View(_, _) => match candid::Decode!(&(*blob_res), render::Result) {
+            ServiceCall::FlushQuit => Ok(None),
+            ServiceCall::Update(_) => Ok(None),
+            ServiceCall::View(_, _) => match candid::Decode!(&(*blob_res), graphics::Result) {
                 Ok(res) => {
                     if ctx.cfg.cli_opt.log_trace {
                         let mut res_log = format!("{:?}", &res);
@@ -818,7 +527,7 @@ pub async fn server_call(ctx: &ConnectCtx, call: ServerCall) -> IcmtResult<Optio
                             res_log.push_str("...(truncated)");
                         }
                         trace!(
-                            "server_call: Successful decoding of graphics output: {:?}",
+                            "service_call: Successful decoding of graphics output: {:?}",
                             res_log
                         );
                     }
@@ -868,7 +577,7 @@ fn main() -> IcmtResult<()> {
                 std::fs::create_dir_all(&cli_opt.capture_output_path)?;
             };
             let raw_args: (String, (u8, u8, u8)) = ron::de::from_str(&user_info_text).unwrap();
-            let user_info: UserInfo = {
+            let user_info: UserInfoCli = {
                 (
                     raw_args.0,
                     (

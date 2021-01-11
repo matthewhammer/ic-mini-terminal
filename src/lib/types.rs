@@ -1,15 +1,48 @@
-/// Types of data sent to and from the game service canister.
+//! Types of data sent to and from the game service canister.
 
+use crate::cli::ConnectCtx;
+use chrono::prelude::*;
+use num_traits::cast::ToPrimitive;
 pub type Nat = candid::Nat;
 
 /// temp hack: username and user-chosen color
-pub type UserInfo = (String, (Nat, Nat, Nat));
+pub type UserInfoCli = (String, (Nat, Nat, Nat));
+
+pub fn nat_ceil(n: &Nat) -> u32 {
+    n.0.to_u32().unwrap()
+}
+
+pub fn byte_ceil(n: &Nat) -> u8 {
+    match n.0.to_u8() {
+        Some(byte) => byte,
+        None => 255,
+    }
+}
+
+/// Form a skip event.
+///
+/// Skip events do nothing but carry meta event info, needed for per-user views.
+pub fn skip_event(ctx: &ConnectCtx) -> event::EventInfo {
+    event::EventInfo {
+        user_info: event::UserInfo {
+            user_name: ctx.cfg.user_info.0.clone(),
+            text_color: (
+                ctx.cfg.user_info.1.clone(),
+                (Nat::from(0), Nat::from(0), Nat::from(0)),
+            ),
+        },
+        nonce: None,
+        date_time_local: Local::now().to_rfc3339(),
+        date_time_utc: Utc::now().to_rfc3339(),
+        event: event::Event::Skip,
+    }
+}
 
 /// Messages from terminal to service (IC canister).
 #[derive(Debug, Clone)]
 pub enum ServiceCall {
     // Query a projected view of the remote canister
-    View(render::Dim, Vec<event::EventInfo>),
+    View(graphics::Dim, Vec<event::EventInfo>),
     // Update the state of the remote canister
     Update(Vec<event::EventInfo>),
     // To process user request to quit interaction
@@ -37,7 +70,7 @@ pub mod lang {
 
     /// Symbolic name (n-ary tree).
     #[derive(Debug, Clone, CandidType, Deserialize, Eq, PartialEq, Hash)]
-    pub enum Name {        
+    pub enum Name {
         Void,
         Atom(Atom),
         TaggedTuple(Box<Name>, Vec<Name>),
@@ -88,9 +121,9 @@ pub mod event {
         #[serde(rename(serialize = "keyDown"))]
         KeyDown(Vec<KeyEventInfo>),
         #[serde(rename(serialize = "mouseDown"))]
-        MouseDown(super::render::Pos),
+        MouseDown(super::graphics::Pos),
         #[serde(rename(serialize = "windowSize"))]
-        WindowSize(super::render::Dim),
+        WindowSize(super::graphics::Dim),
         #[serde(rename(serialize = "clipBoard"))]
         ClipBoard(String),
     }

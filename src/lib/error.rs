@@ -1,4 +1,6 @@
-/// Errors from the mini terminal, or its subcomponents
+//! Errors generated from the mini terminal.
+
+/// Errors from the mini terminal, or its subcomponents.
 #[derive(Debug, Clone)]
 pub enum IcmtError {
     Candid(std::sync::Arc<candid::Error>),

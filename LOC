@@ -1,0 +1,7 @@
+     823    2243   27958 src/bin/ic-mt.rs
+     214     665    6551 src/lib/types.rs
+      61     169    1856 src/lib/error.rs
+      15      49     334 src/lib/mod.rs
+     103     727    5587 src/lib/keyboard.rs
+      71     267    2292 src/lib/cli.rs
+    1287    4120   44578 total

@@ -1,8 +1,8 @@
 
 {
   "canisters": {
-    "textEdit": {
-      "main": "examples/textEdit/Main.mo"
+    "MirrorGarden": {
+      "main": ".vessel/MirrorGarden/master/src/service/Main.mo"
     }
   },
   "defaults": {
@@ -12,8 +12,7 @@
     },
     "start": {
       "address": "127.0.0.1",
-      "port": 8000,
-      "serve_root": "canisters/adapton/assets"
+      "port": 8000
     }
   }
 }

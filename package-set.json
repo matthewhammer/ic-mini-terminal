@@ -6,6 +6,12 @@
     "dependencies": []
   },
   {
+    "name": "adapton",
+    "repo": "https://github.com/matthewhammer/motoko-adapton",
+    "version": "master",
+    "dependencies": ["base"]
+  },
+  {
     "name": "stand",
     "repo": "https://github.com/matthewhammer/motoko-stand",
     "version": "master",
@@ -22,5 +28,11 @@
     "repo": "https://github.com/matthewhammer/motoko-sequence",
     "version": "master",
     "dependencies": ["base"]
+  },
+  {
+    "name": "MirrorGarden",
+    "repo": "https://github.com/matthewhammer/MirrorGarden",
+    "version": "master",
+    "dependencies": ["adapton", "base", "redraw", "sequence"]
   }
 ]

@@ -38,6 +38,7 @@ use std::time::Duration;
 use tokio::task;
 
 use icmt::{
+    cli::*,
     error::*,
     keyboard,
     types::{
@@ -47,83 +48,6 @@ use icmt::{
 };
 use sdl2::render::{Canvas, RenderTarget};
 use sdl2::surface::Surface;
-
-/// Internet Computer Mini Terminal (ic-mt)
-#[derive(StructOpt, Debug, Clone)]
-#[structopt(name = "ic-mt", raw(setting = "clap::AppSettings::DeriveDisplayOrder"))]
-pub struct CliOpt {
-    /// Path for output files with event and screen captures.
-    #[structopt(short = "o", long = "out", default_value = "./out")]
-    capture_output_path: String,
-    /// Frame rate (uniform) for producing captured GIF files with engiffen.
-    #[structopt(long = "engiffen-framerate", default_value = "16")]
-    engiffen_frame_rate: usize,
-    /// Suppress window for graphics output.
-    #[structopt(short = "W", long = "no-window")]
-    no_window: bool,
-    /// Suppress capturing graphics output.
-    #[structopt(short = "C", long = "no-capture")]
-    no_capture: bool,
-    /// Trace-level logging (most verbose)
-    #[structopt(short = "t", long = "trace-log")]
-    log_trace: bool,
-    /// Debug-level logging (medium verbose)
-    #[structopt(short = "d", long = "debug-log")]
-    log_debug: bool,
-    /// Coarse logging information (not verbose)
-    #[structopt(short = "L", long = "log")]
-    log_info: bool,
-    #[structopt(subcommand)]
-    command: CliCommand,
-}
-
-#[derive(StructOpt, Debug, Clone)]
-enum CliCommand {
-    #[structopt(
-        name = "completions",
-        about = "Generate shell scripts for auto-completions."
-    )]
-    Completions { shell: Shell },
-    #[structopt(name = "connect", about = "Connect to an IC canister.")]
-    Connect {
-        replica_url: String,
-        canister_id: String,
-        /// Initialization arguments, as a Candid textual value (default is empty tuple).
-        #[structopt(short = "i", long = "user")]
-        user_info_text: String,
-    },
-}
-
-/// Connection context: IC agent object, for server calls, and configuration info.
-pub struct ConnectCtx {
-    cfg: ConnectCfg,
-    agent: Agent,
-    canister_id: Principal,
-}
-
-/// Connection configuration
-#[derive(Debug, Clone)]
-pub struct ConnectCfg {
-    cli_opt: CliOpt,
-    canister_id: String,
-    replica_url: String,
-    /// temp hack: username and user-chosen color
-    user_info: UserInfo,
-}
-
-/// temp hack: username and user-chosen color
-pub type UserInfo = (String, (Nat, Nat, Nat));
-
-/// Messages that go from this terminal binary to the server cansiter
-#[derive(Debug, Clone)]
-pub enum ServerCall {
-    // Query a projected view of the remote canister
-    View(render::Dim, Vec<event::EventInfo>),
-    // Update the state of the remote canister
-    Update(Vec<event::EventInfo>),
-    // To process user request to quit interaction
-    FlushQuit,
-}
 
 fn init_log(level_filter: log::LevelFilter) {
     use env_logger::{Builder, WriteStyle};

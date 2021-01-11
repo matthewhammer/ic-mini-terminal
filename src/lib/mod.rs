@@ -15,3 +15,4 @@ pub mod draw;
 pub mod error;
 pub mod keyboard;
 pub mod types;
+pub mod write;

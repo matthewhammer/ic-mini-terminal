@@ -1,5 +1,8 @@
 //! Errors generated from the mini terminal.
 
+/// Result from mini terminal.
+pub type IcmtResult<X> = Result<X, IcmtError>;
+
 /// Errors from the mini terminal, or its subcomponents.
 #[derive(Debug, Clone)]
 pub enum IcmtError {

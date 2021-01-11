@@ -14,10 +14,9 @@ extern crate env_logger;
 extern crate structopt;
 use structopt::StructOpt;
 
-use candid::{Decode, Encode};
+use candid::Decode;
 use ic_agent::Agent;
 use ic_types::Principal;
-use std::io::Write;
 
 use candid::Nat;
 use chrono::prelude::*;
@@ -38,6 +37,7 @@ use icmt::{
     error::*,
     keyboard,
     types::{event, graphics, nat_ceil, skip_event, ServiceCall, UserInfoCli},
+    write::write_gifs,
 };
 
 fn init_log(level_filter: log::LevelFilter) {
@@ -51,8 +51,6 @@ fn init_log(level_filter: log::LevelFilter) {
 
 const RETRY_PAUSE: Duration = Duration::from_millis(100);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
-
-pub type IcmtResult<X> = Result<X, IcmtError>;
 
 pub fn create_agent(url: &str) -> IcmtResult<Agent> {
     //use ring::signature::Ed25519KeyPair;
@@ -108,56 +106,6 @@ fn translate_system_event(
         },
         _ => None,
     }
-}
-
-pub fn go_engiffen(
-    cli: &CliOpt,
-    window_dim: &graphics::Dim,
-    events: Vec<event::EventInfo>,
-    bmp_paths: &Vec<String>,
-) -> IcmtResult<()> {
-    if bmp_paths.len() > 0 {
-        use std::fs::File;
-        let images = engiffen::load_images(bmp_paths);
-        let gif = engiffen::engiffen(&images, cli.engiffen_frame_rate, engiffen::Quantizer::Naive)?;
-        assert_eq!(gif.images.len(), bmp_paths.len());
-        let local_time = Local::now().to_rfc3339();
-        {
-            let events_path = format!(
-                "{}/icmt-{}-{}x{}-events.did",
-                cli.capture_output_path, local_time, window_dim.width, window_dim.height
-            );
-            let mut output = File::create(&events_path)?;
-            let events_bytes = Encode!(&events)?;
-            let events_hex = hex::encode(&events_bytes);
-            output.write(&events_hex.as_bytes())?;
-            println!(
-                "Wrote {} events as {} bytes to {}",
-                events.len(),
-                events_bytes.len(),
-                events_path
-            );
-        }
-        {
-            let graphics_path = format!(
-                "{}/icmt-{}-{}x{}-graphics.gif",
-                cli.capture_output_path, local_time, window_dim.width, window_dim.height
-            );
-            let mut output = File::create(&graphics_path)?;
-            gif.write(&mut output)?;
-            println!(
-                "Wrote {} graphics frames to {}",
-                bmp_paths.len(),
-                graphics_path
-            );
-            println!("Removing {} .BMP files...", bmp_paths.len());
-            for bmp_file in bmp_paths.iter() {
-                std::fs::remove_file(bmp_file)?;
-            }
-            println!("Done: Removed {} .BMP files.", bmp_paths.len());
-        }
-    }
-    Ok(())
 }
 
 async fn do_redraw<'a, T1: RenderTarget>(
@@ -381,7 +329,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                     dirty_flag = true;
                     view_events.push(skip_event(&ctx));
                     dump_events.push(skip_event(&ctx));
-                    go_engiffen(&ctx.cfg.cli_opt, &window_dim, dump_events, &engiffen_paths)?;
+                    write_gifs(&ctx.cfg.cli_opt, &window_dim, dump_events, &engiffen_paths)?;
                     dump_events = vec![];
                     engiffen_paths = vec![];
                     window_dim = new_dim;
@@ -460,7 +408,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
         };
 
         if quit_request {
-            go_engiffen(&ctx.cfg.cli_opt, &window_dim, dump_events, &engiffen_paths)?;
+            write_gifs(&ctx.cfg.cli_opt, &window_dim, dump_events, &engiffen_paths)?;
             {
                 print!("Stopping view task... ");
                 view_out.send(None)?;

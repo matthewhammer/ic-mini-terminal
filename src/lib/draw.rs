@@ -104,7 +104,7 @@ pub fn draw_elm<T: RenderTarget>(
 pub async fn draw<T: RenderTarget>(
     canvas: &mut Canvas<T>,
     dim: &graphics::Dim,
-    rr: &Option<graphics::Result>,
+    rr: &graphics::Result,
 ) -> Result<(), String> {
     let pos = graphics::Pos {
         x: nat_zero(),
@@ -112,17 +112,17 @@ pub async fn draw<T: RenderTarget>(
     };
     let fill = graphics::Fill::Closed((nat_zero(), nat_zero(), nat_zero()));
     match rr {
-        Some(graphics::Result::Ok(graphics::Out::Draw(elm))) => {
+        graphics::Result::Ok(graphics::Out::Draw(elm)) => {
             draw_rect_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
         }
-        Some(graphics::Result::Ok(graphics::Out::Redraw(elms))) => {
+        graphics::Result::Ok(graphics::Out::Redraw(elms)) => {
             if elms.len() == 1 && elms[0].0 == "screen" {
                 draw_rect_elms(canvas, &pos, dim, &fill, &vec![elms[0].1.clone()])?;
             } else {
                 warn!("unrecognized redraw elements {:?}", elms);
             }
         }
-        Some(graphics::Result::Err(graphics::Out::Draw(elm))) => {
+        graphics::Result::Err(graphics::Out::Draw(elm)) => {
             draw_rect_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
         }
         _ => unimplemented!(),

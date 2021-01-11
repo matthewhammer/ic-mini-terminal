@@ -114,7 +114,7 @@ async fn do_redraw<'a, T1: RenderTarget>(
     window_canvas: &mut Canvas<T1>,
     file_canvas: &mut Canvas<Surface<'a>>,
     bmp_paths: &mut Vec<String>,
-    data: &Option<graphics::Result>,
+    data: &graphics::Result,
 ) -> IcmtResult<()> {
     if !cli.no_window {
         draw(window_canvas, window_dim, data).await?;
@@ -137,7 +137,7 @@ async fn do_redraw<'a, T1: RenderTarget>(
 async fn do_view_task(
     cfg: ConnectCfg,
     remote_in: mpsc::Receiver<Option<(graphics::Dim, Vec<event::EventInfo>)>>,
-    remote_out: mpsc::Sender<Option<graphics::Result>>,
+    remote_out: mpsc::Sender<graphics::Result>,
 ) -> IcmtResult<()> {
     /* Create our own agent here since we cannot Send it here from the main thread. */
     let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
@@ -154,8 +154,9 @@ async fn do_view_task(
         match events {
             None => return Ok(()),
             Some((window_dim, events)) => {
-                let rr = service_call(&ctx, ServiceCall::View(window_dim, events)).await?;
-                remote_out.send(rr)?;
+                let mut rr = service_call(&ctx, ServiceCall::View(window_dim, events)).await?;
+                assert_eq!(rr.len(), 1);
+                remote_out.send(rr.remove(0))?;
             }
         }
     }
@@ -241,7 +242,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
         // (Consumes remote_in and produces remote_out).
 
         task::spawn(do_update_task(cfg, remote_in, remote_out));
-        local_out.send(ServiceCall::Update(vec![skip_event(&ctx)]))?;
+        local_out.send(ServiceCall::Update(vec![skip_event(&ctx)], graphics::Request::None))?;
         (local_in, local_out)
     };
 
@@ -251,7 +252,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
         // Interaction cycle as two halves (local/remote); each half is a thread.
         // There are four end points along the cycle's halves:
         let (local_out, remote_in) = mpsc::channel::<Option<(graphics::Dim, Vec<event::EventInfo>)>>();
-        let (remote_out, local_in) = mpsc::channel::<Option<graphics::Result>>();
+        let (remote_out, local_in) = mpsc::channel::<graphics::Result>();
 
         // 1. Remote interactions via view calls to service.
         // (Consumes remote_in and produces remote_out).
@@ -373,7 +374,10 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                     update_responses += 1;
                     info!("update_responses = {}", update_responses);
                     update_out
-                        .send(ServiceCall::Update(view_events.clone()))
+                        .send(ServiceCall::Update(
+                            view_events.clone(),
+                            graphics::Request::All(window_dim.clone()),
+                        ))
                         .unwrap();
                     if quit_request {
                         println!("Continue: Quitting...");
@@ -403,7 +407,11 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                         /* not ready; do nothing */
                     }
                 }
-                Err(e) => error!("{:?}", e),
+                Err(e) => {
+                    error!("Update task error: {:?}", e);
+                    println!("Cannot recover; quiting...");
+                    quit_request = true;
+                }
             }
         };
 
@@ -462,9 +470,9 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
 pub async fn service_call(
     ctx: &ConnectCtx,
     call: ServiceCall,
-) -> IcmtResult<Option<graphics::Result>> {
+) -> IcmtResult<Vec<graphics::Result>> {
     if let ServiceCall::FlushQuit = call {
-        return Ok(None);
+        return Ok(vec![]);
     };
     debug!(
         "service_call: to canister_id {:?} at replica_url {:?}",
@@ -479,7 +487,7 @@ pub async fn service_call(
     let arg_bytes = match call.clone() {
         ServiceCall::FlushQuit => candid::encode_args(()).unwrap(),
         ServiceCall::View(window_dim, evs) => candid::encode_args((window_dim, evs)).unwrap(),
-        ServiceCall::Update(evs) => candid::encode_args((evs,)).unwrap(),
+        ServiceCall::Update(evs, req) => candid::encode_args((evs, req)).unwrap(),
     };
     info!(
         "service_call: Encoded argument via Candid; Arg size {:?} bytes",
@@ -498,7 +506,7 @@ pub async fn service_call(
                 .await?;
             Some(resp)
         }
-        ServiceCall::Update(_keys) => {
+        ServiceCall::Update(_keys, _req) => {
             let resp = ctx
                 .agent
                 .update(&ctx.canister_id, "update")
@@ -516,8 +524,15 @@ pub async fn service_call(
             elapsed
         );
         match call.clone() {
-            ServiceCall::FlushQuit => Ok(None),
-            ServiceCall::Update(_) => Ok(None),
+            ServiceCall::FlushQuit => Ok(vec![]),
+            ServiceCall::Update(_, _) => match candid::Decode!(&(*blob_res), Vec<graphics::Result>)
+            {
+                Ok(res) => Ok(res),
+                Err(candid_err) => {
+                    error!("Candid decoding error: {:?}", candid_err);
+                    Err(IcmtError::String("decoding error".to_string()))
+                }
+            },
             ServiceCall::View(_, _) => match candid::Decode!(&(*blob_res), graphics::Result) {
                 Ok(res) => {
                     if ctx.cfg.cli_opt.log_trace {
@@ -531,7 +546,7 @@ pub async fn service_call(
                             res_log
                         );
                     }
-                    Ok(Some(res))
+                    Ok(vec![res])
                 }
                 Err(candid_err) => {
                     error!("Candid decoding error: {:?}", candid_err);

@@ -10,8 +10,8 @@ the mini-terminal update-view service protocol, given below in Candid syntax (el
 
 ```
 service : {
-  update: (vec EventInfo) -> () oneway;
   view: (Dim, vec EventInfo) -> (Graphics) query;
+  update: (vec EventInfo, GraphicsRequest) -> (vec Graphics);
 }
 ```
 

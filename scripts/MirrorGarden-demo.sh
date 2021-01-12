@@ -11,7 +11,7 @@ dfx build MirrorGarden &&\
 dfx canister install MirrorGarden
 
 ic-mt ${1} connect 127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("Alice", (100, 200, 200))' &
-#ic-mt ${1} connect 127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("Bob", (200, 100, 200))' &
+ic-mt ${1} connect 127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("Bob", (200, 100, 200))' &
 echo
 echo Mirror Garden 2-user demo, started.
 echo

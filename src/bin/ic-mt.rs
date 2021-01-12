@@ -165,7 +165,7 @@ async fn do_view_task(
 async fn do_update_task(
     cfg: ConnectCfg,
     remote_in: mpsc::Receiver<ServiceCall>,
-    remote_out: mpsc::Sender<()>,
+    remote_out: mpsc::Sender<Vec<graphics::Result>>,
 ) -> IcmtResult<()> {
     /* Create our own agent here since we cannot Send it here from the main thread. */
     let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
@@ -180,8 +180,8 @@ async fn do_update_task(
         if let ServiceCall::FlushQuit = sc {
             return Ok(());
         };
-        service_call(&ctx, sc).await?;
-        remote_out.send(()).unwrap();
+        let r = service_call(&ctx, sc).await?;
+        remote_out.send(r).unwrap();
     }
 }
 
@@ -236,13 +236,13 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
         // Interaction cycle as two halves (local/remote); each half is a thread.
         // There are four end points along the cycle's halves:
         let (local_out, remote_in) = mpsc::channel::<ServiceCall>();
-        let (remote_out, local_in) = mpsc::channel::<()>();
+        let (remote_out, local_in) = mpsc::channel::<Vec<graphics::Result>>();
 
         // 1. Remote interactions via update calls to service.
         // (Consumes remote_in and produces remote_out).
 
         task::spawn(do_update_task(cfg, remote_in, remote_out));
-        local_out.send(ServiceCall::Update(vec![skip_event(&ctx)], graphics::Request::None))?;
+        local_out.send(ServiceCall::Update(vec![skip_event(&ctx)], graphics::Request::All(window_dim.clone())))?;
         (local_in, local_out)
     };
 
@@ -370,7 +370,8 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
         /* attend to update task */
         {
             match update_in.try_recv() {
-                Ok(()) => {
+                Ok(graphics) => {
+                    info!("graphics.len() = {}", graphics.len());
                     update_responses += 1;
                     info!("update_responses = {}", update_responses);
                     update_out
@@ -383,7 +384,8 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                         println!("Continue: Quitting...");
                         println!("Waiting for final update-task response.");
                         match update_in.try_recv() {
-                            Ok(()) => {
+                            Ok(graphics) => {
+                                info!("graphics.len() = {}", graphics.len());
                                 update_out.send(ServiceCall::FlushQuit)?;
                                 println!("Done.");
                             }
@@ -397,10 +399,12 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                     dirty_flag = true;
                 }
                 Err(mpsc::TryRecvError::Empty) => {
+                    /* Update task not ready */
                     if quit_request {
                         println!("Continue: Quitting...");
                         println!("Waiting for final update-task response.");
-                        update_in.recv()?;
+                        let r = update_in.recv()?;
+                        info!("graphics.len() = {}", r.len());
                         update_out.send(ServiceCall::FlushQuit)?;
                         println!("Done.");
                     } else {
@@ -505,7 +509,7 @@ pub async fn service_call(
                 .await?;
             Some(resp)
         }
-        ServiceCall::Update(_keys, gfx_req) => {
+        ServiceCall::Update(_keys, _gfx_req) => {
             let resp = ctx
                 .agent
                 .update(&ctx.canister_id, "update")

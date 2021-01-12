@@ -224,10 +224,12 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
         surface.into_canvas()?
     };
 
-    let mut view_events = vec![];
-    let mut update_events = vec![];
+    let ev0 = skip_event(&ctx);
 
-    let mut dump_events = vec![];
+    let mut view_events = vec![ev0.clone()];
+    let mut update_events = vec![ev0.clone()];
+    let mut dump_events = vec![ev0.clone()];
+
     let mut engiffen_paths = vec![];
 
     let (update_in, update_out) = /* Begin update task */ {
@@ -242,7 +244,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
         // (Consumes remote_in and produces remote_out).
 
         task::spawn(do_update_task(cfg, remote_in, remote_out));
-        local_out.send(ServiceCall::Update(vec![skip_event(&ctx)], graphics::Request::All(window_dim.clone())))?;
+        local_out.send(ServiceCall::Update(vec![ev0.clone()], graphics::Request::All(window_dim.clone())))?;
         (local_in, local_out)
     };
 
@@ -258,7 +260,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
         // (Consumes remote_in and produces remote_out).
 
         task::spawn(do_view_task(cfg, remote_in, remote_out));
-        local_out.send(Some((window_dim.clone(), vec![skip_event(&ctx)])))?;
+        local_out.send(Some((window_dim.clone(), vec![ev0.clone()])))?;
         (local_in, local_out)
     };
 
@@ -328,8 +330,9 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                 event::Event::WindowSize(new_dim) => {
                     info!("WindowSize {:?}", new_dim);
                     dirty_flag = true;
-                    view_events.push(skip_event(&ctx));
-                    dump_events.push(skip_event(&ctx));
+                    let skip = skip_event(&ctx);
+                    view_events.push(skip.clone());
+                    dump_events.push(skip);
                     write_gifs(&ctx.cfg.cli_opt, &window_dim, dump_events, &engiffen_paths)?;
                     dump_events = vec![];
                     engiffen_paths = vec![];

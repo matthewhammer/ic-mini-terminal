@@ -230,6 +230,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
     let mut update_events = vec![ev0.clone()];
     let mut dump_events = vec![ev0.clone()];
 
+    let mut dump_graphics = vec![];
     let mut engiffen_paths = vec![];
 
     let (update_in, update_out) = /* Begin update task */ {
@@ -333,8 +334,13 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                     let skip = skip_event(&ctx);
                     view_events.push(skip.clone());
                     dump_events.push(skip);
-                    write_gifs(&ctx.cfg.cli_opt, &window_dim, dump_events, &engiffen_paths)?;
-                    dump_events = vec![];
+                    write_gifs(
+                        &ctx.cfg.cli_opt,
+                        &window_dim,
+                        vec![],
+                        &vec![],
+                        &engiffen_paths,
+                    )?;
                     engiffen_paths = vec![];
                     window_dim = new_dim;
                     // to do -- add event to buffer, and send to service
@@ -375,6 +381,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
             match update_in.try_recv() {
                 Ok(graphics) => {
                     info!("graphics.len() = {}", graphics.len());
+                    dump_graphics.extend(graphics);
                     update_responses += 1;
                     info!("update_responses = {}", update_responses);
                     update_out
@@ -389,6 +396,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                         match update_in.try_recv() {
                             Ok(graphics) => {
                                 info!("graphics.len() = {}", graphics.len());
+                                dump_graphics.extend(graphics);
                                 update_out.send(ServiceCall::FlushQuit)?;
                                 println!("Done.");
                             }
@@ -406,8 +414,9 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                     if quit_request {
                         println!("Continue: Quitting...");
                         println!("Waiting for final update-task response.");
-                        let r = update_in.recv()?;
-                        info!("graphics.len() = {}", r.len());
+                        let graphics = update_in.recv()?;
+                        info!("graphics.len() = {}", graphics.len());
+                        dump_graphics.extend(graphics);
                         update_out.send(ServiceCall::FlushQuit)?;
                         println!("Done.");
                     } else {
@@ -423,7 +432,13 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
         };
 
         if quit_request {
-            write_gifs(&ctx.cfg.cli_opt, &window_dim, dump_events, &engiffen_paths)?;
+            write_gifs(
+                &ctx.cfg.cli_opt,
+                &window_dim,
+                dump_events,
+                &dump_graphics,
+                &engiffen_paths,
+            )?;
             {
                 print!("Stopping view task... ");
                 view_out.send(None)?;

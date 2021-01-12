@@ -150,11 +150,11 @@ pub mod graphics {
     /// (Update message's) request for graphics.
     #[derive(Debug, Clone, CandidType, Deserialize, Eq, PartialEq, Hash)]
     pub enum Request {
-        #[serde(rename(deserialize = "none"))]
+        #[serde(rename(serialize = "none"))]
         None,
-        #[serde(rename(deserialize = "all"))]
+        #[serde(rename(serialize = "all"))]
         All(Dim),
-        #[serde(rename(deserialize = "last"))]
+        #[serde(rename(serialize = "last"))]
         Last(Dim),
     }
 

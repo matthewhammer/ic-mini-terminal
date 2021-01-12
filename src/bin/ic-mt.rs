@@ -483,7 +483,6 @@ pub async fn service_call(
         .timeout(REQUEST_TIMEOUT)
         .build();
     let timestamp = std::time::SystemTime::now();
-    info!("service_call: {:?}", call);
     let arg_bytes = match call.clone() {
         ServiceCall::FlushQuit => candid::encode_args(()).unwrap(),
         ServiceCall::View(window_dim, evs) => candid::encode_args((window_dim, evs)).unwrap(),
@@ -506,7 +505,7 @@ pub async fn service_call(
                 .await?;
             Some(resp)
         }
-        ServiceCall::Update(_keys, _req) => {
+        ServiceCall::Update(_keys, gfx_req) => {
             let resp = ctx
                 .agent
                 .update(&ctx.canister_id, "update")
@@ -556,7 +555,8 @@ pub async fn service_call(
         }
     } else {
         error!(
-            "service_call: Error result: {:?}; elapsed time {:?}", blob_res, elapsed
+            "service_call: Error result: {:?}; elapsed time {:?}",
+            blob_res, elapsed
         );
         Err(IcmtError::String("ic-mt error".to_string()))
     }

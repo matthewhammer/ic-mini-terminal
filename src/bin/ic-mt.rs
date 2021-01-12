@@ -245,7 +245,8 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
         // (Consumes remote_in and produces remote_out).
 
         task::spawn(do_update_task(cfg, remote_in, remote_out));
-        local_out.send(ServiceCall::Update(vec![ev0.clone()], graphics::Request::All(window_dim.clone())))?;
+        let req = if ctx.cfg.cli_opt.all_graphics { graphics::Request::All(window_dim.clone()) } else { graphics::Request::None };
+        local_out.send(ServiceCall::Update(vec![ev0.clone()], req))?;
         (local_in, local_out)
     };
 
@@ -384,11 +385,13 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                     dump_graphics.extend(graphics);
                     update_responses += 1;
                     info!("update_responses = {}", update_responses);
+                    let req = if ctx.cfg.cli_opt.all_graphics {
+                        graphics::Request::All(window_dim.clone())
+                    } else {
+                        graphics::Request::None
+                    };
                     update_out
-                        .send(ServiceCall::Update(
-                            view_events.clone(),
-                            graphics::Request::All(window_dim.clone()),
-                        ))
+                        .send(ServiceCall::Update(view_events.clone(), req))
                         .unwrap();
                     if quit_request {
                         println!("Continue: Quitting...");

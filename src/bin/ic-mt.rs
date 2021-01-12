@@ -555,8 +555,9 @@ pub async fn service_call(
             },
         }
     } else {
-        let res = format!("{:?}", blob_res);
-        info!("..error result {:?}", res);
+        error!(
+            "service_call: Error result: {:?}; elapsed time {:?}", blob_res, elapsed
+        );
         Err(IcmtError::String("ic-mt error".to_string()))
     }
 }

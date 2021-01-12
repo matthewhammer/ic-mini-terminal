@@ -154,7 +154,7 @@ pub mod graphics {
         None,
         #[serde(rename(deserialize = "all"))]
         All(Dim),
-        #[serde(rename(deserialize = "left"))]
+        #[serde(rename(deserialize = "last"))]
         Last(Dim),
     }
 

@@ -44,7 +44,7 @@ pub enum ServiceCall {
     // Query a projected view of the remote canister
     View(graphics::Dim, Vec<event::EventInfo>),
     // Update the state of the remote canister
-    Update(Vec<event::EventInfo>),
+    Update(Vec<event::EventInfo>, graphics::Request),
     // To process user request to quit interaction
     FlushQuit,
 }
@@ -146,6 +146,17 @@ pub mod graphics {
 
     /// Color
     pub type Color = (Nat, Nat, Nat);
+
+    /// (Update message's) request for graphics.
+    #[derive(Debug, Clone, CandidType, Deserialize, Eq, PartialEq, Hash)]
+    pub enum Request {
+        #[serde(rename(serialize = "none"))]
+        None,
+        #[serde(rename(serialize = "all"))]
+        All(Dim),
+        #[serde(rename(serialize = "last"))]
+        Last(Dim),
+    }
 
     /// Dimension
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]

@@ -19,9 +19,12 @@ pub struct CliOpt {
     /// Suppress window for graphics output.
     #[structopt(short = "W", long = "no-window")]
     pub no_window: bool,
-    /// Suppress capturing graphics output.
+    /// Suppress capturing video and graphics output.
     #[structopt(short = "C", long = "no-capture")]
     pub no_capture: bool,
+    /// Dump all graphics for updates; for generating replay tests.
+    #[structopt(short = "G", long = "all-graphics")]
+    pub all_graphics: bool,
     /// Trace-level logging (most verbose)
     #[structopt(short = "t", long = "trace-log")]
     pub log_trace: bool,

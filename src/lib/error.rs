@@ -1,5 +1,7 @@
 //! Errors generated from the mini terminal.
 
+use log::error;
+
 /// Result from mini terminal.
 pub type IcmtResult<X> = Result<X, IcmtError>;
 
@@ -14,7 +16,8 @@ pub enum IcmtError {
     RingUnspecified(ring::error::Unspecified),
 }
 impl std::convert::From<ic_agent::AgentError> for IcmtError {
-    fn from(_ae: ic_agent::AgentError) -> Self {
+    fn from(ae: ic_agent::AgentError) -> Self {
+        error!("Detected agent error: {:?}", ae);
         /*IcmtError::Agent(ae)*/
         IcmtError::Agent()
     }

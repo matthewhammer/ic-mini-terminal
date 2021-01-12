@@ -54,6 +54,13 @@ type KeyInfo =
    meta: bool;
    shift: bool;
  };
+type GraphicsRequest_2 = 
+ variant {
+   all: Dim_2;
+   last: Dim_2;
+   none;
+ };
+type GraphicsRequest = GraphicsRequest_2;
 type Graphics = Result;
 type Fill = 
  variant {
@@ -75,6 +82,11 @@ type EventInfo_2 =
 type EventInfo = EventInfo_2;
 type Event = 
  variant {
+   clipBoard: text;
+   fileRead: record {
+               content: text;
+               path: text;
+             };
    keyDown: vec KeyInfo;
    mouseDown: Pos;
    quit;
@@ -103,6 +115,6 @@ type Color =
    nat;
  };
 service : {
-  update: (vec EventInfo) -> () oneway;
+  update: (vec EventInfo, GraphicsRequest) -> (vec Graphics);
   view: (Dim, vec EventInfo) -> (Graphics) query;
 }

@@ -14,7 +14,7 @@ pub struct CliOpt {
     #[structopt(short = "o", long = "out", default_value = "./out")]
     pub capture_output_path: String,
     /// Frame rate (uniform) for producing captured GIF files with engiffen.
-    #[structopt(long = "engiffen-framerate", default_value = "16")]
+    #[structopt(long = "engiffen-framerate", default_value = "6")]
     pub engiffen_frame_rate: usize,
     /// Suppress window for graphics output.
     #[structopt(short = "W", long = "no-window")]
@@ -61,6 +61,9 @@ pub enum CliCommand {
         replica_url: String,
         canister_id: String,
         events_file_path: String,
+        /// Frame size, in number of events, for the replay's update requests.
+        #[structopt(short = "s", long = "frame_size", default_value = "6")]
+        frame_size: usize,
     },
 }
 

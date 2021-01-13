@@ -190,10 +190,14 @@ async fn do_update_task(
 }
 
 async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
-    let (is_live, mut replay_events) = match &ctx.cfg.user_kind {
-        UserKind::Replay(evs) => (false, evs.clone()),
-        UserKind::Local(_) => (true, vec![]),
-    };
+    let (is_live, mut replay_events, frame_size) =
+        match (&ctx.cfg.cli_opt.command, &ctx.cfg.user_kind) {
+            (CliCommand::Replay { frame_size, .. }, UserKind::Replay(evs)) => {
+                (false, evs.clone(), frame_size.clone())
+            }
+            (CliCommand::Connect { .. }, UserKind::Local(_)) => (true, vec![], 0),
+            _ => unreachable!(),
+        };
 
     let mut window_dim = graphics::Dim {
         width: Nat::from(320),
@@ -404,13 +408,23 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                 update_out.send(ServiceCall::FlushQuit)?;
                 quit_request = true
             } else {
-                let replay_events_now = vec![replay_events.pop().unwrap()];
+                let replay_events_now = if replay_events.len() > frame_size {
+                    let tl = replay_events.split_off(replay_events.len() - frame_size);
+                    let hd = replay_events;
+                    replay_events = tl;
+                    hd
+                } else {
+                    let r = replay_events;
+                    replay_events = vec![];
+                    r
+                };
                 replay_event_counter += replay_events_now.len();
                 info!(
                     "Replaying {} event(s), with {} remaining",
                     replay_events_now.len(),
                     replay_events.len()
                 );
+                dump_events.extend(replay_events.clone());
                 update_out.send(ServiceCall::Update(
                     replay_events_now,
                     graphics::Request::All(window_dim.clone()),
@@ -431,7 +445,8 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                     dump_graphics.extend(graphics);
                     update_responses += 1;
                     info!("update_responses = {}", update_responses);
-                    if is_live { /* send the local events in the view buffer */
+                    if is_live {
+                        /* send the local events in the view buffer */
                         let req = if ctx.cfg.cli_opt.all_graphics {
                             graphics::Request::All(window_dim.clone())
                         } else {
@@ -549,8 +564,8 @@ pub async fn service_call(
     };
     let prefix = match &call {
         ServiceCall::FlushQuit => unreachable!(),
-        ServiceCall::View{..} => "Service (view):",
-        ServiceCall::Update{..} => "Service (update):",
+        ServiceCall::View { .. } => "Service (view):",
+        ServiceCall::Update { .. } => "Service (update):",
     };
     debug!(
         "{}: to canister_id {:?} at replica_url {:?}",
@@ -568,7 +583,8 @@ pub async fn service_call(
     };
     info!(
         "{}: Encoded argument via Candid; Arg size {:?} bytes",
-        prefix, arg_bytes.len()
+        prefix,
+        arg_bytes.len()
     );
     info!("{}: Awaiting response from service...", prefix);
     // do an update or query call, based on the ServiceCall case:
@@ -620,7 +636,8 @@ pub async fn service_call(
                             res_log.push_str("...(truncated)");
                         }
                         trace!(
-                            "{}: Successful decoding of graphics output: {:?}", prefix,
+                            "{}: Successful decoding of graphics output: {:?}",
+                            prefix,
                             res_log
                         );
                     }
@@ -634,8 +651,8 @@ pub async fn service_call(
         }
     } else {
         error!(
-            "{}: Error result: {:?}; elapsed time {:?}", prefix,
-            blob_res, elapsed
+            "{}: Error result: {:?}; elapsed time {:?}",
+            prefix, blob_res, elapsed
         );
         Err(IcmtError::String("ic-mt error".to_string()))
     }
@@ -648,12 +665,14 @@ fn run(cfg: ConnectCfg) -> IcmtResult<()> {
     };
     let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
     let agent = create_agent(&cfg.replica_url)?;
+
+    info!("Connecting to IC canister: {}", canister_id);
     let ctx = ConnectCtx {
         cfg,
         canister_id,
         agent,
     };
-    info!("Connecting to IC canister: {:?}", ctx.cfg);
+    trace!("{:?}", ctx.cfg);
 
     use tokio::runtime::Runtime;
     let mut runtime = Runtime::new().expect("Unable to create a runtime");
@@ -684,6 +703,7 @@ fn main() -> IcmtResult<()> {
             canister_id,
             replica_url,
             events_file_path,
+            ..
         } => {
             let events_hex = fs::read_to_string(events_file_path)?;
             let events_bin = hex::decode(&events_hex)?;

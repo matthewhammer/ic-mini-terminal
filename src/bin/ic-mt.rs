@@ -409,7 +409,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                 quit_request = true
             } else {
                 let replay_events_now = if replay_events.len() > frame_size {
-                    let tl = replay_events.split_off(replay_events.len() - frame_size);
+                    let tl = replay_events.split_off(frame_size);
                     let hd = replay_events;
                     replay_events = tl;
                     hd
@@ -420,9 +420,10 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                 };
                 replay_event_counter += replay_events_now.len();
                 info!(
-                    "Replaying {} event(s), with {} remaining",
+                    "Replaying {} event(s), with {} remaining (using frame_size {})...",
                     replay_events_now.len(),
-                    replay_events.len()
+                    replay_events.len(),
+                    frame_size
                 );
                 dump_events.extend(replay_events.clone());
                 update_out.send(ServiceCall::Update(

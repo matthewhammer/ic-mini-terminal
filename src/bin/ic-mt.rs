@@ -401,6 +401,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
             }
         } else {
             if replay_events.len() == 0 {
+                update_out.send(ServiceCall::FlushQuit)?;
                 quit_request = true
             } else {
                 let replay_events_now = vec![replay_events.pop().unwrap()];
@@ -418,7 +419,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
         }
 
         /* attend to update task */
-        {
+        if is_live || !quit_request {
             let update_msg = if is_live {
                 update_in.try_recv()
             } else {
@@ -430,14 +431,16 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                     dump_graphics.extend(graphics);
                     update_responses += 1;
                     info!("update_responses = {}", update_responses);
-                    let req = if ctx.cfg.cli_opt.all_graphics {
-                        graphics::Request::All(window_dim.clone())
-                    } else {
-                        graphics::Request::None
+                    if is_live { /* send the local events in the view buffer */
+                        let req = if ctx.cfg.cli_opt.all_graphics {
+                            graphics::Request::All(window_dim.clone())
+                        } else {
+                            graphics::Request::None
+                        };
+                        update_out
+                            .send(ServiceCall::Update(view_events.clone(), req))
+                            .unwrap();
                     };
-                    update_out
-                        .send(ServiceCall::Update(view_events.clone(), req))
-                        .unwrap();
                     if quit_request {
                         println!("Continue: Quitting...");
                         println!("Waiting for final update-task response.");
@@ -545,9 +548,10 @@ pub async fn service_call(
         return Ok(vec![]);
     };
     let prefix = match &call {
-        ServiceCall::View => "view",
-        ServiceCall::Update => "update",
-    }
+        ServiceCall::FlushQuit => unreachable!(),
+        ServiceCall::View{..} => "Service (view):",
+        ServiceCall::Update{..} => "Service (update):",
+    };
     debug!(
         "{}: to canister_id {:?} at replica_url {:?}",
         prefix, ctx.cfg.canister_id, ctx.cfg.replica_url

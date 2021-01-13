@@ -14,7 +14,7 @@ pub struct CliOpt {
     #[structopt(short = "o", long = "out", default_value = "./out")]
     pub capture_output_path: String,
     /// Frame rate (uniform) for producing captured GIF files with engiffen.
-    #[structopt(long = "engiffen-framerate", default_value = "16")]
+    #[structopt(long = "engiffen-framerate", default_value = "2")]
     pub engiffen_frame_rate: usize,
     /// Suppress window for graphics output.
     #[structopt(short = "W", long = "no-window")]

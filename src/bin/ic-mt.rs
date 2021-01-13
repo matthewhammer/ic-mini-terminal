@@ -187,8 +187,8 @@ async fn do_update_task(
 
 async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
     let mut window_dim = graphics::Dim {
-        width: Nat::from(320),
-        height: Nat::from(240),
+        width: Nat::from(500),
+        height: Nat::from(400),
     }; // use CLI to init
 
     let sdl = sdl2::init()?;

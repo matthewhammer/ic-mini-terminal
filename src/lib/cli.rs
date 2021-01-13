@@ -53,6 +53,15 @@ pub enum CliCommand {
         #[structopt(short = "i", long = "user")]
         user_info_text: String,
     },
+    #[structopt(
+        name = "replay",
+        about = "Replay captured events as if they were live."
+    )]
+    Replay {
+        replica_url: String,
+        canister_id: String,
+        events_file_path: String,
+    },
 }
 
 /// Connection context: IC agent object, for server calls, and configuration info.
@@ -68,6 +77,5 @@ pub struct ConnectCfg {
     pub cli_opt: CliOpt,
     pub canister_id: String,
     pub replica_url: String,
-    /// temp hack: username and user-chosen color
-    pub user_info: crate::types::UserInfoCli,
+    pub user_kind: crate::types::UserKind,
 }

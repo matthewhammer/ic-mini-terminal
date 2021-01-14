@@ -8,6 +8,13 @@ pub type Nat = candid::Nat;
 /// temp hack: username and user-chosen color
 pub type UserInfoCli = (String, (Nat, Nat, Nat));
 
+/// User kind.
+#[derive(Debug, Clone)]
+pub enum UserKind {
+    Local(UserInfoCli),
+    Replay(Vec<event::EventInfo>),
+}
+
 pub fn nat_ceil(n: &Nat) -> u32 {
     n.0.to_u32().unwrap()
 }
@@ -19,22 +26,42 @@ pub fn byte_ceil(n: &Nat) -> u8 {
     }
 }
 
+/// user name.
+pub fn user_name(ctx: &ConnectCtx) -> Option<String> {
+    match &ctx.cfg.user_kind {
+        UserKind::Local(user_info) => Some(user_info.0.clone()),
+        UserKind::Replay(_) => None,
+    }
+}
+
+/// text color.
+pub fn text_color(ctx: &ConnectCtx) -> Option<(Nat, Nat, Nat)> {
+    match &ctx.cfg.user_kind {
+        UserKind::Local(user_info) => Some(user_info.1.clone()),
+        UserKind::Replay(_) => None,
+    }
+}
+
 /// Form a skip event.
 ///
 /// Skip events do nothing but carry meta event info, needed for per-user views.
 pub fn skip_event(ctx: &ConnectCtx) -> event::EventInfo {
-    event::EventInfo {
-        user_info: event::UserInfo {
-            user_name: ctx.cfg.user_info.0.clone(),
-            text_color: (
-                ctx.cfg.user_info.1.clone(),
-                (Nat::from(0), Nat::from(0), Nat::from(0)),
-            ),
-        },
-        nonce: None,
-        date_time_local: Local::now().to_rfc3339(),
-        date_time_utc: Utc::now().to_rfc3339(),
-        event: event::Event::Skip,
+    if let UserKind::Local(_) = ctx.cfg.user_kind {
+        event::EventInfo {
+            user_info: event::UserInfo {
+                user_name: user_name(ctx).unwrap(),
+                text_color: (
+                    text_color(ctx).unwrap(),
+                    (Nat::from(0), Nat::from(0), Nat::from(0)),
+                ),
+            },
+            nonce: None,
+            date_time_local: Local::now().to_rfc3339(),
+            date_time_utc: Utc::now().to_rfc3339(),
+            event: event::Event::Skip,
+        }
+    } else {
+        unimplemented!("skip events only come from live interaction, the Local user kind.")
     }
 }
 
@@ -93,38 +120,38 @@ pub mod event {
     /// User information for identifying events' user origins.
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub struct UserInfo {
-        #[serde(rename(serialize = "userName"))]
+        #[serde(rename(serialize = "userName", deserialize = "userName"))]
         pub user_name: String,
-        #[serde(rename(serialize = "textColor"))]
+        #[serde(rename(serialize = "textColor", deserialize = "textColor"))]
         pub text_color: ((Nat, Nat, Nat), (Nat, Nat, Nat)),
     }
 
     /// Event information (full record).
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub struct EventInfo {
-        #[serde(rename(serialize = "userInfo"))]
+        #[serde(rename(serialize = "userInfo", deserialize = "userInfo"))]
         pub user_info: UserInfo,
         pub nonce: Option<Nat>,
-        #[serde(rename(serialize = "dateTimeUtc"))]
+        #[serde(rename(serialize = "dateTimeUtc", deserialize = "dateTimeUtc"))]
         pub date_time_utc: String,
-        #[serde(rename(serialize = "dateTimeLocal"))]
+        #[serde(rename(serialize = "dateTimeLocal", deserialize = "dateTimeLocal"))]
         pub date_time_local: String,
         pub event: Event,
     }
     /// Event(-specific information).
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Event {
-        #[serde(rename(serialize = "skip"))]
+        #[serde(rename(serialize = "skip", deserialize = "skip"))]
         Skip,
-        #[serde(rename(serialize = "quit"))]
+        #[serde(rename(serialize = "quit", deserialize = "quit"))]
         Quit,
-        #[serde(rename(serialize = "keyDown"))]
+        #[serde(rename(serialize = "keyDown", deserialize = "keyDown"))]
         KeyDown(Vec<KeyEventInfo>),
-        #[serde(rename(serialize = "mouseDown"))]
+        #[serde(rename(serialize = "mouseDown", deserialize = "mouseDown"))]
         MouseDown(super::graphics::Pos),
-        #[serde(rename(serialize = "windowSize"))]
+        #[serde(rename(serialize = "windowSize", deserialize = "windowSize"))]
         WindowSize(super::graphics::Dim),
-        #[serde(rename(serialize = "clipBoard"))]
+        #[serde(rename(serialize = "clipBoard", deserialize = "clipBoard"))]
         ClipBoard(String),
     }
     /// Keyboard event information.

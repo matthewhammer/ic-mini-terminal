@@ -14,7 +14,14 @@ pub enum IcmtError {
     Engiffen(), /* Clone => engiffen::Error */
     RingKeyRejected(ring::error::KeyRejected),
     RingUnspecified(ring::error::Unspecified),
+    FromHexError(hex::FromHexError),
 }
+impl std::convert::From<hex::FromHexError> for IcmtError {
+    fn from(fhe: hex::FromHexError) -> Self {
+        IcmtError::FromHexError(fhe)
+    }
+}
+
 impl std::convert::From<ic_agent::AgentError> for IcmtError {
     fn from(ae: ic_agent::AgentError) -> Self {
         error!("Detected agent error: {:?}", ae);

@@ -26,6 +26,7 @@ use sdl2::event::WindowEvent;
 use sdl2::keyboard::Keycode;
 use sdl2::render::{Canvas, RenderTarget};
 use sdl2::surface::Surface;
+use std::fs;
 use std::io;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -36,7 +37,10 @@ use icmt::{
     draw::*,
     error::*,
     keyboard,
-    types::{event, graphics, nat_ceil, skip_event, ServiceCall, UserInfoCli},
+    types::{
+        event, graphics, nat_ceil, skip_event, text_color, user_name, ServiceCall, UserInfoCli,
+        UserKind,
+    },
     write::write_gifs,
 };
 
@@ -186,6 +190,15 @@ async fn do_update_task(
 }
 
 async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
+    let (is_live, mut replay_events, frame_size) =
+        match (&ctx.cfg.cli_opt.command, &ctx.cfg.user_kind) {
+            (CliCommand::Replay { frame_size, .. }, UserKind::Replay(evs)) => {
+                (false, evs.clone(), frame_size.clone())
+            }
+            (CliCommand::Connect { .. }, UserKind::Local(_)) => (true, vec![], 0),
+            _ => unreachable!(),
+        };
+
     let mut window_dim = graphics::Dim {
         width: Nat::from(500),
         height: Nat::from(400),
@@ -224,14 +237,19 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
         surface.into_canvas()?
     };
 
-    let ev0 = skip_event(&ctx);
-
-    let mut view_events = vec![ev0.clone()];
-    let mut update_events = vec![ev0.clone()];
-    let mut dump_events = vec![ev0.clone()];
+    let mut view_events = vec![];
+    let mut update_events = vec![];
+    let mut dump_events = vec![];
 
     let mut dump_graphics = vec![];
     let mut engiffen_paths = vec![];
+
+    if is_live {
+        let ev0 = skip_event(&ctx);
+        view_events = vec![];
+        dump_events = vec![ev0.clone()];
+        update_events = vec![ev0.clone()];
+    };
 
     let (update_in, update_out) = /* Begin update task */ {
         let cfg = ctx.cfg.clone();
@@ -246,7 +264,10 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
 
         task::spawn(do_update_task(cfg, remote_in, remote_out));
         let req = if ctx.cfg.cli_opt.all_graphics { graphics::Request::All(window_dim.clone()) } else { graphics::Request::None };
-        local_out.send(ServiceCall::Update(vec![ev0.clone()], req))?;
+        if is_live {
+            local_out.send(ServiceCall::Update(update_events, req))?;
+            update_events = vec![];
+        }
         (local_in, local_out)
     };
 
@@ -262,7 +283,8 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
         // (Consumes remote_in and produces remote_out).
 
         task::spawn(do_view_task(cfg, remote_in, remote_out));
-        local_out.send(Some((window_dim.clone(), vec![ev0.clone()])))?;
+        local_out.send(Some((window_dim.clone(), view_events)))?;
+        view_events = vec![];
         (local_in, local_out)
     };
 
@@ -276,6 +298,8 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
     let mut view_requests = Nat::from(1); // count view task requests (already one).
     let mut view_responses = Nat::from(0); // count view task responses (none yet).
 
+    let mut replay_event_counter = Nat::from(0); // count replay events replayed (none yet).
+
     // 2. Local interactions via the SDL Event loop.
     let mut event_pump = {
         use sdl2::event::EventType;
@@ -288,111 +312,151 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
     };
 
     'running: loop {
-        if let Some(system_event) = event_pump.wait_event_timeout(13) {
-            // utc/local timestamps for event
-            let event = translate_system_event(&video_subsystem, &system_event);
-            let event = match event {
-                None => continue 'running,
-                Some(event) => event,
-            };
-            trace!("SDL event_pump.wait_event() => {:?}", &system_event);
-            // catch window resize event: redraw and loop:
-            match event {
-                event::Event::MouseDown(_) => {
-                    // ignore (for now)
-                }
-                event::Event::Skip => {
-                    // ignore
-                }
-                event::Event::Quit => {
-                    info!("Quit");
-                    println!("Begin: Quitting...");
-                    println!("Waiting for next update response...");
-                    quit_request = true;
-                }
-                event::Event::ClipBoard(text) => {
-                    info!("ClipBoard: {}", text);
-                    dirty_flag = true;
-                    let ev = event::EventInfo {
-                        user_info: event::UserInfo {
-                            user_name: ctx.cfg.user_info.0.clone(),
-                            text_color: (
-                                ctx.cfg.user_info.1.clone(),
-                                (Nat::from(0), Nat::from(0), Nat::from(0)),
-                            ),
-                        },
-                        nonce: None,
-                        date_time_local: Local::now().to_rfc3339(),
-                        date_time_utc: Utc::now().to_rfc3339(),
-                        event: event::Event::ClipBoard(text),
+        if is_live {
+            if let Some(system_event) = event_pump.wait_event_timeout(13) {
+                {
+                    // utc/local timestamps for event
+                    let event = translate_system_event(&video_subsystem, &system_event);
+                    let event = match event {
+                        None => continue 'running,
+                        Some(event) => event,
                     };
-                    view_events.push(ev.clone());
-                    dump_events.push(ev);
-                }
-                event::Event::WindowSize(new_dim) => {
-                    info!("WindowSize {:?}", new_dim);
-                    dirty_flag = true;
-                    let skip = skip_event(&ctx);
-                    view_events.push(skip.clone());
-                    dump_events.push(skip);
-                    write_gifs(
-                        &ctx.cfg.cli_opt,
-                        &window_dim,
-                        vec![],
-                        &vec![],
-                        &engiffen_paths,
-                    )?;
-                    engiffen_paths = vec![];
-                    window_dim = new_dim;
-                    // to do -- add event to buffer, and send to service
-                    file_canvas = {
-                        // Re-size canvas by re-creating it.
-                        let surface = sdl2::surface::Surface::new(
-                            nat_ceil(&window_dim.width),
-                            nat_ceil(&window_dim.height),
-                            sdl2::pixels::PixelFormatEnum::RGBA8888,
-                        )?;
-                        surface.into_canvas()?
-                    };
-                }
-                event::Event::KeyDown(ref keys) => {
-                    info!("KeyDown {:?}", keys);
-                    dirty_flag = true;
-                    let ev = event::EventInfo {
-                        user_info: event::UserInfo {
-                            user_name: ctx.cfg.user_info.0.clone(),
-                            text_color: (
-                                ctx.cfg.user_info.1.clone(),
-                                (Nat::from(0), Nat::from(0), Nat::from(0)),
-                            ),
-                        },
-                        nonce: None,
-                        date_time_local: Local::now().to_rfc3339(),
-                        date_time_utc: Utc::now().to_rfc3339(),
-                        event: event::Event::KeyDown(keys.clone()),
-                    };
-                    view_events.push(ev.clone());
-                    dump_events.push(ev);
+                    trace!("SDL event_pump.wait_event() => {:?}", &system_event);
+                    // catch window resize event: redraw and loop:
+                    match event {
+                        event::Event::MouseDown(_) => {
+                            // ignore (for now)
+                        }
+                        event::Event::Skip => {
+                            // ignore
+                        }
+                        event::Event::Quit => {
+                            info!("Quit");
+                            println!("Begin: Quitting...");
+                            println!("Waiting for next update response...");
+                            quit_request = true;
+                        }
+                        event::Event::ClipBoard(text) => {
+                            info!("ClipBoard: {}", text);
+                            dirty_flag = true;
+                            let ev = event::EventInfo {
+                                user_info: event::UserInfo {
+                                    user_name: user_name(&ctx).unwrap(),
+                                    text_color: (
+                                        text_color(&ctx).unwrap(),
+                                        (Nat::from(0), Nat::from(0), Nat::from(0)),
+                                    ),
+                                },
+                                nonce: None,
+                                date_time_local: Local::now().to_rfc3339(),
+                                date_time_utc: Utc::now().to_rfc3339(),
+                                event: event::Event::ClipBoard(text),
+                            };
+                            view_events.push(ev.clone());
+                            dump_events.push(ev);
+                        }
+                        event::Event::WindowSize(new_dim) => {
+                            info!("WindowSize {:?}", new_dim);
+                            dirty_flag = true;
+                            let skip = skip_event(&ctx);
+                            view_events.push(skip.clone());
+                            dump_events.push(skip);
+                            write_gifs(
+                                &ctx.cfg.cli_opt,
+                                &window_dim,
+                                vec![],
+                                &vec![],
+                                &engiffen_paths,
+                            )?;
+                            engiffen_paths = vec![];
+                            window_dim = new_dim;
+                            // to do -- add event to buffer, and send to service
+                            file_canvas = {
+                                // Re-size canvas by re-creating it.
+                                let surface = sdl2::surface::Surface::new(
+                                    nat_ceil(&window_dim.width),
+                                    nat_ceil(&window_dim.height),
+                                    sdl2::pixels::PixelFormatEnum::RGBA8888,
+                                )?;
+                                surface.into_canvas()?
+                            };
+                        }
+                        event::Event::KeyDown(ref keys) => {
+                            info!("KeyDown {:?}", keys);
+                            dirty_flag = true;
+                            let ev = event::EventInfo {
+                                user_info: event::UserInfo {
+                                    user_name: user_name(&ctx).unwrap(),
+                                    text_color: (
+                                        text_color(&ctx).unwrap(),
+                                        (Nat::from(0), Nat::from(0), Nat::from(0)),
+                                    ),
+                                },
+                                nonce: None,
+                                date_time_local: Local::now().to_rfc3339(),
+                                date_time_utc: Utc::now().to_rfc3339(),
+                                event: event::Event::KeyDown(keys.clone()),
+                            };
+                            view_events.push(ev.clone());
+                            dump_events.push(ev);
+                        }
+                    }
                 }
             }
-        };
+        } else {
+            if replay_events.len() == 0 {
+                update_out.send(ServiceCall::FlushQuit)?;
+                quit_request = true
+            } else {
+                let replay_events_now = if replay_events.len() > frame_size {
+                    let tl = replay_events.split_off(frame_size);
+                    let hd = replay_events;
+                    replay_events = tl;
+                    hd
+                } else {
+                    let r = replay_events;
+                    replay_events = vec![];
+                    r
+                };
+                replay_event_counter += replay_events_now.len();
+                info!(
+                    "Replaying {} event(s), with {} remaining (using frame_size {})...",
+                    replay_events_now.len(),
+                    replay_events.len(),
+                    frame_size
+                );
+                dump_events.extend(replay_events.clone());
+                update_out.send(ServiceCall::Update(
+                    replay_events_now,
+                    graphics::Request::All(window_dim.clone()),
+                ))?;
+            }
+        }
 
         /* attend to update task */
-        {
-            match update_in.try_recv() {
+        if is_live || !quit_request {
+            let update_msg = if is_live {
+                update_in.try_recv()
+            } else {
+                update_in.recv().map_err(mpsc::TryRecvError::from)
+            };
+            match update_msg {
                 Ok(graphics) => {
                     info!("graphics.len() = {}", graphics.len());
                     dump_graphics.extend(graphics);
                     update_responses += 1;
                     info!("update_responses = {}", update_responses);
-                    let req = if ctx.cfg.cli_opt.all_graphics {
-                        graphics::Request::All(window_dim.clone())
-                    } else {
-                        graphics::Request::None
+                    if is_live {
+                        /* send the local events in the view buffer */
+                        let req = if ctx.cfg.cli_opt.all_graphics {
+                            graphics::Request::All(window_dim.clone())
+                        } else {
+                            graphics::Request::None
+                        };
+                        update_out
+                            .send(ServiceCall::Update(view_events.clone(), req))
+                            .unwrap();
                     };
-                    update_out
-                        .send(ServiceCall::Update(view_events.clone(), req))
-                        .unwrap();
                     if quit_request {
                         println!("Continue: Quitting...");
                         println!("Waiting for final update-task response.");
@@ -499,9 +563,14 @@ pub async fn service_call(
     if let ServiceCall::FlushQuit = call {
         return Ok(vec![]);
     };
+    let prefix = match &call {
+        ServiceCall::FlushQuit => unreachable!(),
+        ServiceCall::View { .. } => "Service (view):",
+        ServiceCall::Update { .. } => "Service (update):",
+    };
     debug!(
-        "service_call: to canister_id {:?} at replica_url {:?}",
-        ctx.cfg.canister_id, ctx.cfg.replica_url
+        "{}: to canister_id {:?} at replica_url {:?}",
+        prefix, ctx.cfg.canister_id, ctx.cfg.replica_url
     );
     let delay = Delay::builder()
         .throttle(RETRY_PAUSE)
@@ -514,10 +583,11 @@ pub async fn service_call(
         ServiceCall::Update(evs, req) => candid::encode_args((evs, req)).unwrap(),
     };
     info!(
-        "service_call: Encoded argument via Candid; Arg size {:?} bytes",
+        "{}: Encoded argument via Candid; Arg size {:?} bytes",
+        prefix,
         arg_bytes.len()
     );
-    info!("service_call: Awaiting response from service...");
+    info!("{}: Awaiting response from service...", prefix);
     // do an update or query call, based on the ServiceCall case:
     let blob_res = match call.clone() {
         ServiceCall::FlushQuit => None,
@@ -543,7 +613,8 @@ pub async fn service_call(
     let elapsed = timestamp.elapsed().unwrap();
     if let Some(blob_res) = blob_res {
         info!(
-            "service_call: Ok: Response size {:?} bytes; elapsed time {:?}",
+            "{}: Ok: Response size {:?} bytes; elapsed time {:?}",
+            prefix,
             blob_res.len(),
             elapsed
         );
@@ -553,7 +624,7 @@ pub async fn service_call(
             {
                 Ok(res) => Ok(res),
                 Err(candid_err) => {
-                    error!("Candid decoding error: {:?}", candid_err);
+                    error!("{}: Candid decoding error: {:?}", prefix, candid_err);
                     Err(IcmtError::String("decoding error".to_string()))
                 }
             },
@@ -566,31 +637,51 @@ pub async fn service_call(
                             res_log.push_str("...(truncated)");
                         }
                         trace!(
-                            "service_call: Successful decoding of graphics output: {:?}",
+                            "{}: Successful decoding of graphics output: {:?}",
+                            prefix,
                             res_log
                         );
                     }
                     Ok(vec![res])
                 }
                 Err(candid_err) => {
-                    error!("Candid decoding error: {:?}", candid_err);
+                    error!("{}: Candid decoding error: {:?}", prefix, candid_err);
                     Err(IcmtError::String("decoding error".to_string()))
                 }
             },
         }
     } else {
         error!(
-            "service_call: Error result: {:?}; elapsed time {:?}",
-            blob_res, elapsed
+            "{}: Error result: {:?}; elapsed time {:?}",
+            prefix, blob_res, elapsed
         );
         Err(IcmtError::String("ic-mt error".to_string()))
     }
 }
 
-fn main() -> IcmtResult<()> {
+fn run(cfg: ConnectCfg) -> IcmtResult<()> {
+    let capout = std::path::Path::new(&cfg.cli_opt.capture_output_path);
+    if !capout.exists() {
+        std::fs::create_dir_all(&cfg.cli_opt.capture_output_path)?;
+    };
+    let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
+    let agent = create_agent(&cfg.replica_url)?;
+
+    info!("Connecting to IC canister: {}", canister_id);
+    let ctx = ConnectCtx {
+        cfg,
+        canister_id,
+        agent,
+    };
+    trace!("{:?}", ctx.cfg);
+
     use tokio::runtime::Runtime;
     let mut runtime = Runtime::new().expect("Unable to create a runtime");
+    runtime.block_on(local_event_loop(ctx)).ok();
+    Ok(())
+}
 
+fn main() -> IcmtResult<()> {
     let cli_opt = CliOpt::from_args();
     init_log(
         match (cli_opt.log_trace, cli_opt.log_debug, cli_opt.log_info) {
@@ -606,17 +697,32 @@ fn main() -> IcmtResult<()> {
         CliCommand::Completions { shell: s } => {
             // see also: https://clap.rs/effortless-auto-completion/
             CliOpt::clap().gen_completions_to("icmt", s, &mut io::stdout());
-            info!("done")
+            info!("done");
+            Ok(())
+        }
+        CliCommand::Replay {
+            canister_id,
+            replica_url,
+            events_file_path,
+            ..
+        } => {
+            let events_hex = fs::read_to_string(events_file_path)?;
+            let events_bin = hex::decode(&events_hex)?;
+            let events = Decode!(&events_bin, Vec<event::EventInfo>)?;
+            let user_kind = UserKind::Replay(events);
+            let cfg = ConnectCfg {
+                canister_id,
+                replica_url,
+                cli_opt,
+                user_kind,
+            };
+            run(cfg)
         }
         CliCommand::Connect {
             canister_id,
             replica_url,
             user_info_text,
         } => {
-            let capout = std::path::Path::new(&cli_opt.capture_output_path);
-            if !capout.exists() {
-                std::fs::create_dir_all(&cli_opt.capture_output_path)?;
-            };
             let raw_args: (String, (u8, u8, u8)) = ron::de::from_str(&user_info_text).unwrap();
             let user_info: UserInfoCli = {
                 (
@@ -628,22 +734,16 @@ fn main() -> IcmtResult<()> {
                     ),
                 )
             };
+            let user_kind = UserKind::Local(user_info);
             let cfg = ConnectCfg {
                 canister_id,
                 replica_url,
                 cli_opt,
-                user_info,
+                user_kind,
             };
-            let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
-            let agent = create_agent(&cfg.replica_url)?;
-            let ctx = ConnectCtx {
-                cfg,
-                canister_id,
-                agent,
-            };
-            info!("Connecting to IC canister: {:?}", ctx.cfg);
-            runtime.block_on(local_event_loop(ctx)).ok();
+            run(cfg)
         }
-    };
+    }
+    .ok();
     Ok(())
 }

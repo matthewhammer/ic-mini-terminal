@@ -14,7 +14,7 @@ pub struct CliOpt {
     #[structopt(short = "o", long = "out", default_value = "./out")]
     pub capture_output_path: String,
     /// Frame rate (uniform) for producing captured GIF files with engiffen.
-    #[structopt(long = "engiffen-framerate", default_value = "2")]
+    #[structopt(long = "engiffen-framerate", default_value = "6")]
     pub engiffen_frame_rate: usize,
     /// Suppress window for graphics output.
     #[structopt(short = "W", long = "no-window")]
@@ -53,6 +53,18 @@ pub enum CliCommand {
         #[structopt(short = "i", long = "user")]
         user_info_text: String,
     },
+    #[structopt(
+        name = "replay",
+        about = "Replay captured events as if they were live."
+    )]
+    Replay {
+        replica_url: String,
+        canister_id: String,
+        events_file_path: String,
+        /// Frame size, in number of events, for the replay's update requests.
+        #[structopt(short = "s", long = "frame_size", default_value = "6")]
+        frame_size: usize,
+    },
 }
 
 /// Connection context: IC agent object, for server calls, and configuration info.
@@ -68,6 +80,5 @@ pub struct ConnectCfg {
     pub cli_opt: CliOpt,
     pub canister_id: String,
     pub replica_url: String,
-    /// temp hack: username and user-chosen color
-    pub user_info: crate::types::UserInfoCli,
+    pub user_kind: crate::types::UserKind,
 }

@@ -16,7 +16,7 @@ echo
 echo Hint: Ready for manual mini-terminal connection:
 echo   For example:
 echo
-echo   ic-mt connect 127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("xyz", (100, 200, 200))'
+echo   ic-mt connect 127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("User", (100, 200, 200))'
 echo
 case ${1} in
   "" | "0")
@@ -29,7 +29,7 @@ case ${1} in
     echo
     ;;
   "2")
-    ic-mt ${2} connect 127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("Alice", (100, 200, 200))'
+    ic-mt ${2} connect 127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("Alice", (100, 200, 200))' &
     ic-mt ${2} connect 127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("Bob", (200, 100, 200))' &
     echo
     echo Started two live terminals, for Alice and Bob.

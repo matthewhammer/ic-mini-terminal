@@ -425,7 +425,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                     replay_events.len(),
                     frame_size
                 );
-                dump_events.extend(replay_events.clone());
+                dump_events.extend(replay_events_now.clone());
                 update_out.send(ServiceCall::Update(
                     replay_events_now,
                     graphics::Request::All(window_dim.clone()),
@@ -442,10 +442,10 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
             };
             match update_msg {
                 Ok(graphics) => {
-                    info!("graphics.len() = {}", graphics.len());
+                    debug!("graphics.len() = {}", graphics.len());
                     dump_graphics.extend(graphics);
                     update_responses += 1;
-                    info!("update_responses = {}", update_responses);
+                    debug!("update_responses = {}", update_responses);
                     if is_live {
                         /* send the local events in the view buffer */
                         let req = if ctx.cfg.cli_opt.all_graphics {
@@ -471,7 +471,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                         }
                     };
                     update_requests += 1;
-                    info!("update_requests = {}", update_requests);
+                    debug!("update_requests = {}", update_requests);
                     update_events = view_events;
                     view_events = vec![];
                     dirty_flag = true;
@@ -519,7 +519,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
             match view_in.try_recv() {
                 Ok(rr) => {
                     view_responses += 1;
-                    info!("view_responses = {}", view_responses);
+                    debug!("view_responses = {}", view_responses);
 
                     do_redraw(
                         &(ctx.cfg).cli_opt,
@@ -546,7 +546,7 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                 view_out.send(Some((window_dim.clone(), events)))?;
 
                 view_requests += 1;
-                info!("view_requests = {}", view_requests);
+                debug!("view_requests = {}", view_requests);
             }
         };
 

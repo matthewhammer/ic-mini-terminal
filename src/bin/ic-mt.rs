@@ -1,4 +1,4 @@
-extern crate delay;
+extern crate garcon;
 extern crate futures;
 extern crate ic_agent;
 extern crate ic_types;
@@ -20,7 +20,6 @@ use ic_types::Principal;
 
 use candid::Nat;
 use chrono::prelude::*;
-use delay::Delay;
 use sdl2::event::Event as SysEvent; // not to be confused with our own definition
 use sdl2::event::WindowEvent;
 use sdl2::keyboard::Keycode;
@@ -56,20 +55,22 @@ fn init_log(level_filter: log::LevelFilter) {
 const RETRY_PAUSE: Duration = Duration::from_millis(100);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
-pub fn create_agent(url: &str) -> IcmtResult<Agent> {
+async fn create_agent(url: &str) -> IcmtResult<Agent> {
     //use ring::signature::Ed25519KeyPair;
-    use ic_agent::agent::AgentConfig;
     use ring::rand::SystemRandom;
 
+    // to do -- read identity from a file
     let rng = SystemRandom::new();
     let pkcs8_bytes = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)?;
     let key_pair = ring::signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
-    let ident = ic_agent::identity::BasicIdentity::from_key_pair(key_pair);
-    let agent = Agent::new(AgentConfig {
-        identity: Box::new(ident),
-        url: format!("http://{}", url),
-        ..AgentConfig::default()
-    })?;
+    let ident = ic_agent::identity::BasicIdentity::from_key_pair(key_pair);    
+    let agent = Agent::builder()
+        .with_url(format!("http://{}", url))
+        .with_identity(ident)
+        .build()?;
+    if true { // to do -- CLI switch.
+        agent.fetch_root_key().await?;
+    }
     Ok(agent)
 }
 
@@ -145,7 +146,7 @@ async fn do_view_task(
 ) -> IcmtResult<()> {
     /* Create our own agent here since we cannot Send it here from the main thread. */
     let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
-    let agent = create_agent(&cfg.replica_url)?;
+    let agent = create_agent(&cfg.replica_url).await?;
     let ctx = ConnectCtx {
         cfg: cfg.clone(),
         canister_id,
@@ -173,7 +174,7 @@ async fn do_update_task(
 ) -> IcmtResult<()> {
     /* Create our own agent here since we cannot Send it here from the main thread. */
     let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
-    let agent = create_agent(&cfg.replica_url)?;
+    let agent = create_agent(&cfg.replica_url).await?;
     let ctx = ConnectCtx {
         cfg,
         canister_id,
@@ -572,7 +573,7 @@ pub async fn service_call(
         "{}: to canister_id {:?} at replica_url {:?}",
         prefix, ctx.cfg.canister_id, ctx.cfg.replica_url
     );
-    let delay = Delay::builder()
+    let delay = garcon::Delay::builder()
         .throttle(RETRY_PAUSE)
         .timeout(REQUEST_TIMEOUT)
         .build();
@@ -659,13 +660,13 @@ pub async fn service_call(
     }
 }
 
-fn run(cfg: ConnectCfg) -> IcmtResult<()> {
+async fn run(cfg: ConnectCfg) -> IcmtResult<()> {
     let capout = std::path::Path::new(&cfg.cli_opt.capture_output_path);
     if !capout.exists() {
         std::fs::create_dir_all(&cfg.cli_opt.capture_output_path)?;
     };
     let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
-    let agent = create_agent(&cfg.replica_url)?;
+    let agent = create_agent(&cfg.replica_url).await?;
 
     info!("Connecting to IC canister: {}", canister_id);
     let ctx = ConnectCtx {
@@ -675,13 +676,12 @@ fn run(cfg: ConnectCfg) -> IcmtResult<()> {
     };
     trace!("{:?}", ctx.cfg);
 
-    use tokio::runtime::Runtime;
-    let mut runtime = Runtime::new().expect("Unable to create a runtime");
-    runtime.block_on(local_event_loop(ctx)).ok();
+    local_event_loop(ctx).await?;
     Ok(())
 }
 
-fn main() -> IcmtResult<()> {
+#[tokio::main]
+async fn main() -> IcmtResult<()> {
     let cli_opt = CliOpt::from_args();
     init_log(
         match (cli_opt.log_trace, cli_opt.log_debug, cli_opt.log_info) {
@@ -693,12 +693,11 @@ fn main() -> IcmtResult<()> {
     );
     info!("Evaluating CLI command: {:?} ...", &cli_opt.command);
     let c = cli_opt.command.clone();
-    match c {
+    let () = match c {
         CliCommand::Completions { shell: s } => {
             // see also: https://clap.rs/effortless-auto-completion/
             CliOpt::clap().gen_completions_to("icmt", s, &mut io::stdout());
             info!("done");
-            Ok(())
         }
         CliCommand::Replay {
             canister_id,
@@ -716,7 +715,7 @@ fn main() -> IcmtResult<()> {
                 cli_opt,
                 user_kind,
             };
-            run(cfg)
+            run(cfg).await?;
         }
         CliCommand::Connect {
             canister_id,
@@ -741,9 +740,8 @@ fn main() -> IcmtResult<()> {
                 cli_opt,
                 user_kind,
             };
-            run(cfg)
+            run(cfg).await?;
         }
-    }
-    .ok();
+    };    
     Ok(())
 }

@@ -676,9 +676,7 @@ async fn run(cfg: ConnectCfg) -> IcmtResult<()> {
     };
     trace!("{:?}", ctx.cfg);
 
-    use tokio::runtime::Runtime;
-    let runtime = Runtime::new().expect("Unable to create a runtime");
-    runtime.block_on(local_event_loop(ctx)).ok();
+    local_event_loop(ctx).await?;
     Ok(())
 }
 

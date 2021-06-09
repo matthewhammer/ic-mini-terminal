@@ -1,6 +1,6 @@
 //! Draw.
 
-use log::{trace, warn};
+use log::{trace, warn, error};
 
 use crate::{
     color::*,
@@ -94,10 +94,6 @@ pub fn draw_elm<T: RenderTarget>(
             draw_rect(canvas, pos, r, f);
             Ok(())
         }
-        &Elm::Text(t, ta) => {
-            warn!("to do {:?} {:?}", t, ta);
-            Ok(())
-        }
     }
 }
 
@@ -122,10 +118,12 @@ pub async fn draw<T: RenderTarget>(
                 warn!("unrecognized redraw elements {:?}", elms);
             }
         }
-        graphics::Result::Err(graphics::Out::Draw(elm)) => {
-            draw_rect_elms(canvas, &pos, dim, &fill, &vec![elm.clone()])?;
+        graphics::Result::Err(opt_message) => {
+            match opt_message {
+                None => error!("Error result from server. No message."),
+                Some(ref m) => error!("Error message from server: {}", m),
+            }
         }
-        _ => unimplemented!(),
     };
     canvas.present();
     // to do -- if enabled, dump canvas as .BMP file to next output image file in the stream that we are producing

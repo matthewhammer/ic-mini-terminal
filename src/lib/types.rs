@@ -85,13 +85,13 @@ pub mod lang {
     /// Directions in two dimensional space.
     #[derive(Debug, Clone, CandidType, Deserialize, Eq, PartialEq, Hash)]
     pub enum Dir2D {
-        #[serde(rename(deserialize = "up"))]
+        #[serde(rename = "up")]
         Up,
-        #[serde(rename(deserialize = "down"))]
+        #[serde(rename = "down")]
         Down,
-        #[serde(rename(deserialize = "left"))]
+        #[serde(rename = "left")]
         Left,
-        #[serde(rename(deserialize = "right"))]
+        #[serde(rename = "right")]
         Right,
     }
 
@@ -120,38 +120,38 @@ pub mod event {
     /// User information for identifying events' user origins.
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub struct UserInfo {
-        #[serde(rename(serialize = "userName", deserialize = "userName"))]
+        #[serde(rename = "userName")]
         pub user_name: String,
-        #[serde(rename(serialize = "textColor", deserialize = "textColor"))]
+        #[serde(rename = "textColor")]
         pub text_color: ((Nat, Nat, Nat), (Nat, Nat, Nat)),
     }
 
     /// Event information (full record).
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub struct EventInfo {
-        #[serde(rename(serialize = "userInfo", deserialize = "userInfo"))]
+        #[serde(rename = "userInfo")]
         pub user_info: UserInfo,
         pub nonce: Option<Nat>,
-        #[serde(rename(serialize = "dateTimeUtc", deserialize = "dateTimeUtc"))]
+        #[serde(rename = "dateTimeUtc")]
         pub date_time_utc: String,
-        #[serde(rename(serialize = "dateTimeLocal", deserialize = "dateTimeLocal"))]
+        #[serde(rename = "dateTimeLocal")]
         pub date_time_local: String,
         pub event: Event,
     }
     /// Event(-specific information).
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Event {
-        #[serde(rename(serialize = "skip", deserialize = "skip"))]
+        #[serde(rename = "skip")]
         Skip,
-        #[serde(rename(serialize = "quit", deserialize = "quit"))]
+        #[serde(rename = "quit")]
         Quit,
-        #[serde(rename(serialize = "keyDown", deserialize = "keyDown"))]
+        #[serde(rename = "keyDown")]
         KeyDown(Vec<KeyEventInfo>),
-        #[serde(rename(serialize = "mouseDown", deserialize = "mouseDown"))]
+        #[serde(rename = "mouseDown")]
         MouseDown(super::graphics::Pos),
-        #[serde(rename(serialize = "windowSize", deserialize = "windowSize"))]
+        #[serde(rename = "windowSize")]
         WindowSize(super::graphics::Dim),
-        #[serde(rename(serialize = "clipBoard", deserialize = "clipBoard"))]
+        #[serde(rename = "clipBoard")]
         ClipBoard(String),
     }
     /// Keyboard event information.
@@ -177,11 +177,11 @@ pub mod graphics {
     /// (Update message's) request for graphics.
     #[derive(Debug, Clone, CandidType, Deserialize, Eq, PartialEq, Hash)]
     pub enum Request {
-        #[serde(rename(serialize = "none"))]
+        #[serde(rename = "none")]
         None,
-        #[serde(rename(serialize = "all"))]
+        #[serde(rename = "all")]
         All(Dim),
-        #[serde(rename(serialize = "last"))]
+        #[serde(rename = "last")]
         Last(Dim),
     }
 
@@ -223,63 +223,40 @@ pub mod graphics {
     /// Fill
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Fill {
-        #[serde(rename(deserialize = "open"))]
+        #[serde(rename = "open")]
         Open(Color, Nat), // border width
-        #[serde(rename(deserialize = "closed"))]
+        #[serde(rename = "closed")]
         Closed(Color),
-        #[serde(rename(deserialize = "none"))]
+        #[serde(rename = "none")]
         None,
     }
     /// Element
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Elm {
-        #[serde(rename(deserialize = "rect"))]
+        #[serde(rename = "rect")]
         Rect(Rect, Fill),
-        #[serde(rename(deserialize = "node"))]
-        Node(Box<Node>),
-        #[serde(rename(deserialize = "text"))]
-        Text(String, TextAtts),
+        #[serde(rename = "node")]
+        Node(Box<Node>)
     }
     /// Elements
     pub type Elms = Vec<Elm>;
     /// Named elements
     pub type NamedElms = Vec<(String, Elm)>;
-    /// Text attributes
-    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
-    pub struct TextAtts {
-        pub zoom: Nat,
-        #[serde(rename(deserialize = "fgFill"))]
-        pub fg_fill: Fill,
-        #[serde(rename(deserialize = "bgFill"))]
-        pub bg_fill: Fill,
-        #[serde(rename(deserialize = "glyphDim"))]
-        pub glyph_dim: Dim,
-        #[serde(rename(deserialize = "glyphFlow"))]
-        pub glyph_flow: FlowAtts,
-    }
-    /// Flow attributes
-    #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
-    pub struct FlowAtts {
-        pub dir: super::lang::Dir2D,
-        #[serde(rename(deserialize = "intraPad"))]
-        pub intra_pad: Nat,
-        #[serde(rename(deserialize = "interPad"))]
-        pub inter_pad: Nat,
-    }
+
     /// Output
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Out {
-        #[serde(rename(deserialize = "draw"))]
+        #[serde(rename = "draw")]
         Draw(Elm),
-        #[serde(rename(deserialize = "redraw"))]
+        #[serde(rename = "redraw")]
         Redraw(NamedElms),
     }
     /// Result
     #[derive(Clone, Debug, CandidType, Deserialize, Hash, PartialEq, Eq)]
     pub enum Result {
-        #[serde(rename(deserialize = "ok"))]
+        #[serde(rename = "ok")]
         Ok(Out),
-        #[serde(rename(deserialize = "err"))]
-        Err(Out),
+        #[serde(rename = "err")]
+        Err(Option<String>),
     }
 }

@@ -1,30 +1,20 @@
-type UserInfo = 
+type UserInfo =
  record {
-   textColor: record {
-                record {
-                  nat;
-                  nat;
-                  nat;
-                };
-                record {
-                  nat;
-                  nat;
-                  nat;
-                };
-              };
+   textColor:
+    record { // foreground, background
+     record { nat; nat; nat; };
+     record { nat; nat; nat; };
+   };
    userName: text;
  };
 type Result = 
  variant {
-   err: record {
-          message: opt text;
-          out: Out;
-        };
+   err: opt text;
    ok: Out;
  };
 type Rect = 
  record {
-   dim: Dim_2;
+   dim: Dim;
    pos: Pos;
  };
 type Pos = 
@@ -54,13 +44,12 @@ type KeyInfo =
    meta: bool;
    shift: bool;
  };
-type GraphicsRequest_2 = 
+type GraphicsRequest = 
  variant {
-   all: Dim_2;
-   last: Dim_2;
+   all: Dim;
+   last: Dim;
    none;
  };
-type GraphicsRequest = GraphicsRequest_2;
 type Graphics = Result;
 type Fill = 
  variant {
@@ -91,7 +80,7 @@ type Event =
    mouseDown: Pos;
    quit;
    skip;
-   windowSize: Dim_2;
+   windowSize: Dim;
  };
 type Elms = vec Elm;
 type Elm = 
@@ -102,12 +91,11 @@ type Elm =
            Fill;
          };
  };
-type Dim_2 = 
+type Dim = 
  record {
    height: nat;
    width: nat;
  };
-type Dim = Dim_2;
 type Color = 
  record {
    nat;

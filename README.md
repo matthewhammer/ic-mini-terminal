@@ -22,7 +22,7 @@ For details, see the [full Candid spec](https://github.com/matthewhammer/ic-mini
 Requirements:
 
  * Rust and `cargo`
- * `dfx` via the [DFINITY SDK](https://sdk.dfinity.org/docs/quickstart/quickstart.html)
+ * `dfx` via the [DFINITY SDK](https://dfinity.org/developers/)
 
 Optionally:
 

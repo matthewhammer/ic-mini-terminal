@@ -58,6 +58,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 async fn create_agent(url: &str) -> IcmtResult<Agent> {
     //use ring::signature::Ed25519KeyPair;
     use ring::rand::SystemRandom;
+    info!("creating agent.");
 
     // to do -- read identity from a file
     let rng = SystemRandom::new();
@@ -65,12 +66,14 @@ async fn create_agent(url: &str) -> IcmtResult<Agent> {
     let key_pair = ring::signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
     let ident = ic_agent::identity::BasicIdentity::from_key_pair(key_pair);    
     let agent = Agent::builder()
-        .with_url(format!("http://{}", url))
+        .with_url(url)
         .with_identity(ident)
         .build()?;
+    info!("built agent.");
     if true { // to do -- CLI switch.
         agent.fetch_root_key().await?;
     }
+    info!("got root key.");
     Ok(agent)
 }
 

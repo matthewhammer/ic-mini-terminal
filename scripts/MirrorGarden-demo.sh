@@ -30,7 +30,7 @@ echo
 echo Hint: Ready for manual mini-terminal connection:
 echo   For example:
 echo
-echo   ic-mt connect 127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("User", (100, 200, 200))'
+echo   ic-mt connect http://127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("User", (100, 200, 200))'
 echo
 case ${1} in
   "-h" | "--help" | "help")
@@ -41,14 +41,14 @@ case ${1} in
     echo No initial terminals requested.  All done.
     ;;
   "1")
-    ic-mt ${2} connect 127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("Alice", (100, 200, 200))' &
+    ic-mt ${2} connect http://127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("Alice", (100, 200, 200))' &
     echo
     echo Started one live terminal for Alice.
     echo
     ;;
   "2")
-    ic-mt ${2} connect 127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("Alice", (100, 200, 200))' &
-    ic-mt ${2} connect 127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("Bob", (200, 100, 200))' &
+    ic-mt ${2} connect http://127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("Alice", (100, 200, 200))' &
+    ic-mt ${2} connect http://127.0.0.1:8000 `dfx canister id MirrorGarden` --user '("Bob", (200, 100, 200))' &
     echo
     echo Started two live terminals, for Alice and Bob.
     echo

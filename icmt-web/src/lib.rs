@@ -10,13 +10,8 @@ use std::rc::Rc;
 
 extern crate icmt;
 use icmt::{
-    color,
-    draw,
-    error,
-    keyboard::{self, KeyEventInfo},
     types::{
-        event::{self, Event}, graphics, nat_ceil, skip_event, text_color, user_name, ServiceCall, UserInfoCli,
-        UserKind,
+        event::{self, Event, KeyEventInfo}, graphics, nat_ceil, ServiceCall
     },
 };
 

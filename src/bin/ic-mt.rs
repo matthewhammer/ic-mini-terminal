@@ -1,5 +1,5 @@
-extern crate garcon;
 extern crate futures;
+extern crate garcon;
 extern crate ic_agent;
 extern crate ic_types;
 extern crate icmt;
@@ -64,13 +64,14 @@ async fn create_agent(url: &str) -> IcmtResult<Agent> {
     let rng = SystemRandom::new();
     let pkcs8_bytes = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)?;
     let key_pair = ring::signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
-    let ident = ic_agent::identity::BasicIdentity::from_key_pair(key_pair);    
+    let ident = ic_agent::identity::BasicIdentity::from_key_pair(key_pair);
     let agent = Agent::builder()
         .with_url(url)
         .with_identity(ident)
         .build()?;
     info!("built agent.");
-    if true { // to do -- CLI switch.
+    if true {
+        // to do -- CLI switch.
         agent.fetch_root_key().await?;
     }
     info!("got root key.");
@@ -436,6 +437,57 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                 ))?;
             }
         }
+        if quit_request {
+            write_gifs(
+                &ctx.cfg.cli_opt,
+                &window_dim,
+                dump_events,
+                &dump_graphics,
+                &engiffen_paths,
+            )?;
+            {
+                print!("Stopping view task... ");
+                view_out.send(None)?;
+                println!("Done.");
+            }
+            println!("All done.");
+            return Ok(());
+        } else
+        /* attend to view task */
+        {
+            match view_in.try_recv() {
+                Ok(rr) => {
+                    view_responses += 1;
+                    info!("view_responses = {}", view_responses);
+
+                    do_redraw(
+                        &(ctx.cfg).cli_opt,
+                        &window_dim,
+                        &mut window_canvas,
+                        &mut file_canvas,
+                        &mut engiffen_paths,
+                        &rr,
+                    )
+                    .await?;
+
+                    ready_flag = true;
+                }
+                Err(mpsc::TryRecvError::Empty) => { /* not ready; do nothing */ }
+                Err(e) => error!("{:?}", e),
+            };
+
+            if dirty_flag && ready_flag {
+                dirty_flag = false;
+                ready_flag = false;
+                let mut events = update_events.clone();
+                events.append(&mut (view_events.clone()));
+
+                view_out.send(Some((window_dim.clone(), events)))?;
+
+                view_requests += 1;
+                debug!("view_requests = {}", view_requests);
+            }
+        };
 
         /* attend to update task */
         if is_live || !quit_request {
@@ -499,58 +551,6 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                     println!("Cannot recover; quiting...");
                     quit_request = true;
                 }
-            }
-        };
-
-        if quit_request {
-            write_gifs(
-                &ctx.cfg.cli_opt,
-                &window_dim,
-                dump_events,
-                &dump_graphics,
-                &engiffen_paths,
-            )?;
-            {
-                print!("Stopping view task... ");
-                view_out.send(None)?;
-                println!("Done.");
-            }
-            println!("All done.");
-            return Ok(());
-        } else
-        /* attend to view task */
-        {
-            match view_in.try_recv() {
-                Ok(rr) => {
-                    view_responses += 1;
-                    debug!("view_responses = {}", view_responses);
-
-                    do_redraw(
-                        &(ctx.cfg).cli_opt,
-                        &window_dim,
-                        &mut window_canvas,
-                        &mut file_canvas,
-                        &mut engiffen_paths,
-                        &rr,
-                    )
-                    .await?;
-
-                    ready_flag = true;
-                }
-                Err(mpsc::TryRecvError::Empty) => { /* not ready; do nothing */ }
-                Err(e) => error!("{:?}", e),
-            };
-
-            if dirty_flag && ready_flag {
-                dirty_flag = false;
-                ready_flag = false;
-                let mut events = update_events.clone();
-                events.append(&mut (view_events.clone()));
-
-                view_out.send(Some((window_dim.clone(), events)))?;
-
-                view_requests += 1;
-                debug!("view_requests = {}", view_requests);
             }
         };
 
@@ -745,6 +745,6 @@ async fn main() -> IcmtResult<()> {
             };
             run(cfg).await?;
         }
-    };    
+    };
     Ok(())
 }

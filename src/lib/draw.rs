@@ -1,6 +1,6 @@
 //! Draw.
 
-use log::{trace, warn, error};
+use log::{error, trace, warn};
 
 use crate::{
     color::*,
@@ -118,12 +118,10 @@ pub async fn draw<T: RenderTarget>(
                 warn!("unrecognized redraw elements {:?}", elms);
             }
         }
-        graphics::Result::Err(opt_message) => {
-            match opt_message {
-                None => error!("Error result from server. No message."),
-                Some(ref m) => error!("Error message from server: {}", m),
-            }
-        }
+        graphics::Result::Err(opt_message) => match opt_message {
+            None => error!("Error result from server. No message."),
+            Some(ref m) => error!("Error message from server: {}", m),
+        },
     };
     canvas.present();
     // to do -- if enabled, dump canvas as .BMP file to next output image file in the stream that we are producing

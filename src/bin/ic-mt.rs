@@ -436,6 +436,57 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
                 ))?;
             }
         }
+        if quit_request {
+            write_gifs(
+                &ctx.cfg.cli_opt,
+                &window_dim,
+                dump_events,
+                &dump_graphics,
+                &engiffen_paths,
+            )?;
+            {
+                print!("Stopping view task... ");
+                view_out.send(None)?;
+                println!("Done.");
+            }
+            println!("All done.");
+            return Ok(());
+        } else
+        /* attend to view task */
+        {
+            match view_in.try_recv() {
+                Ok(rr) => {
+                    view_responses += 1;
+                    info!("view_responses = {}", view_responses);
+
+                    do_redraw(
+                        &(ctx.cfg).cli_opt,
+                        &window_dim,
+                        &mut window_canvas,
+                        &mut file_canvas,
+                        &mut engiffen_paths,
+                        &rr,
+                    )
+                    .await?;
+
+                    ready_flag = true;
+                }
+                Err(mpsc::TryRecvError::Empty) => { /* not ready; do nothing */ }
+                Err(e) => error!("{:?}", e),
+            };
+
+            if dirty_flag && ready_flag {
+                dirty_flag = false;
+                ready_flag = false;
+                let mut events = update_events.clone();
+                events.append(&mut (view_events.clone()));
+
+                view_out.send(Some((window_dim.clone(), events)))?;
+
+                view_requests += 1;
+                debug!("view_requests = {}", view_requests);
+            }
+        };
 
         /* attend to update task */
         if is_live || !quit_request {
@@ -502,57 +553,6 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
             }
         };
 
-        if quit_request {
-            write_gifs(
-                &ctx.cfg.cli_opt,
-                &window_dim,
-                dump_events,
-                &dump_graphics,
-                &engiffen_paths,
-            )?;
-            {
-                print!("Stopping view task... ");
-                view_out.send(None)?;
-                println!("Done.");
-            }
-            println!("All done.");
-            return Ok(());
-        } else
-        /* attend to view task */
-        {
-            match view_in.try_recv() {
-                Ok(rr) => {
-                    view_responses += 1;
-                    debug!("view_responses = {}", view_responses);
-
-                    do_redraw(
-                        &(ctx.cfg).cli_opt,
-                        &window_dim,
-                        &mut window_canvas,
-                        &mut file_canvas,
-                        &mut engiffen_paths,
-                        &rr,
-                    )
-                    .await?;
-
-                    ready_flag = true;
-                }
-                Err(mpsc::TryRecvError::Empty) => { /* not ready; do nothing */ }
-                Err(e) => error!("{:?}", e),
-            };
-
-            if dirty_flag && ready_flag {
-                dirty_flag = false;
-                ready_flag = false;
-                let mut events = update_events.clone();
-                events.append(&mut (view_events.clone()));
-
-                view_out.send(Some((window_dim.clone(), events)))?;
-
-                view_requests += 1;
-                debug!("view_requests = {}", view_requests);
-            }
-        };
 
         // attend to next batch of local events, and loop everything above
         continue 'running;

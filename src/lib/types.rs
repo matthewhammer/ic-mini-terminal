@@ -236,7 +236,7 @@ pub mod graphics {
         #[serde(rename = "rect")]
         Rect(Rect, Fill),
         #[serde(rename = "node")]
-        Node(Box<Node>)
+        Node(Box<Node>),
     }
     /// Elements
     pub type Elms = Vec<Elm>;

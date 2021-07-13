@@ -1,5 +1,5 @@
-extern crate garcon;
 extern crate futures;
+extern crate garcon;
 extern crate ic_agent;
 extern crate ic_types;
 extern crate icmt;
@@ -64,13 +64,14 @@ async fn create_agent(url: &str) -> IcmtResult<Agent> {
     let rng = SystemRandom::new();
     let pkcs8_bytes = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)?;
     let key_pair = ring::signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
-    let ident = ic_agent::identity::BasicIdentity::from_key_pair(key_pair);    
+    let ident = ic_agent::identity::BasicIdentity::from_key_pair(key_pair);
     let agent = Agent::builder()
         .with_url(url)
         .with_identity(ident)
         .build()?;
     info!("built agent.");
-    if true { // to do -- CLI switch.
+    if true {
+        // to do -- CLI switch.
         agent.fetch_root_key().await?;
     }
     info!("got root key.");
@@ -553,7 +554,6 @@ async fn local_event_loop(ctx: ConnectCtx) -> Result<(), IcmtError> {
             }
         };
 
-
         // attend to next batch of local events, and loop everything above
         continue 'running;
     }
@@ -745,6 +745,6 @@ async fn main() -> IcmtResult<()> {
             };
             run(cfg).await?;
         }
-    };    
+    };
     Ok(())
 }

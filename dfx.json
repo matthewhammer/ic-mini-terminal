@@ -3,6 +3,9 @@
   "canisters": {
     "MirrorGarden": {
       "main": ".vessel/MirrorGarden/master/service/MirrorGarden.mo"
+    },
+    "Dungeon": {
+      "main": "example/Dungeon/Main.mo"
     }
   },
   "defaults": {

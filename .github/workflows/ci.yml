@@ -19,6 +19,7 @@ jobs:
       run: |
         dfx start --background
         dfx deploy --no-wallet Example
+
   build_mac_release:
     name: Build ic-mt for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

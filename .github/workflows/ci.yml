@@ -17,7 +17,8 @@ jobs:
         echo y | DFX_VERSION=$DFX_VERSION bash -ci "$(curl -fsSL https://sdk.dfinity.org/install.sh)"
         echo "/home/runner/bin" >> $GITHUB_PATH
         dfx cache install
-    - name: BuildDeploy
+        ./scripts/vessel-install.sh
+    - name: Build_and_deploy
       run: |
         dfx start --background
         dfx deploy --no-wallet Example

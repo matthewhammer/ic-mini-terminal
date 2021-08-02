@@ -1,8 +1,8 @@
 
 {
   "canisters": {
-    "Example": {
-      "main": "example/Main.mo"
+    "Counter": {
+      "main": "examples/Counter.mo"
     }
   },
   "defaults": {

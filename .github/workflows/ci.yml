@@ -5,8 +5,8 @@ on:
       - master
   pull_request:
 jobs:
-  build_motoko_package:
-    name: Build Motoko icmt package
+  Motoko_icmt_package:
+    name: Motoko icmt package
     runs-on: ubuntu-latest
     env:
       DFX_VERSION: 0.7.2
@@ -22,6 +22,16 @@ jobs:
       run: |
         dfx start --background
         dfx deploy --no-wallet Example
+    - name: Tests
+      run: echo "to do"
+    - name: Docs_build
+      run: /home/runner/.cache/dfinity/versions/$DFX_VERSION/mo-doc
+    - name: Docs_upload
+      uses: JamesIves/github-pages-deploy-action@releases/v3
+      with:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        BRANCH: gh-pages
+        FOLDER: docs/
 
   build_mac_release:
     name: Build ic-mt for ${{ matrix.os }}

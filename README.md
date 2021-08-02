@@ -46,7 +46,7 @@ class Counter(initCount : Nat) {
 };
 ```
 
-The [full example](#toDo) uses this class to instantiate the [`terminal/Terminal.Basic` class](#toDo), which adapts the simple (single-event) `draw`-`update` protocol shown below to that of the "full" `icmt` service protocol.
+The [full example](https://github.com/matthewhammer/ic-mini-terminal/tree/master/examples/Counter.mo) uses this class to instantiate the [`terminal/Terminal.Basic` class](http://matthewhammer.org/ic-mini-terminal/terminal/Terminal.html#type.Basic), which adapts the simple (single-event) `draw`-`update` protocol shown below to that of the "full" `icmt` service protocol.
 
 ## Technical spec
 

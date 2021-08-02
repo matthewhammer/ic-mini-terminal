@@ -5,21 +5,6 @@ on:
       - master
   pull_request:
 jobs:
-  build_motoko_package:
-    name: Build Motoko icmt package
-    env:
-      DFX_VERSION: 0.7.2
-    steps:
-    - name: Install
-      run: |
-        echo y | DFX_VERSION=$DFX_VERSION bash -ci "$(curl -fsSL https://sdk.dfinity.org/install.sh)"
-        echo "/home/runner/bin" >> $GITHUB_PATH
-        dfx cache install
-    - name: BuildDeploy
-      run: |
-        dfx start --background
-        dfx deploy --no-wallet Example
-
   build_mac_release:
     name: Build ic-mt for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

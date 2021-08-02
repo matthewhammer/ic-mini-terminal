@@ -51,5 +51,8 @@ jobs:
       run: |
         sudo apt-get install libsdl2-dev
     - name: Build
-      run: cargo build --release
+      run: |
+        pwd
+        cargo build
+        cargo build --release
 

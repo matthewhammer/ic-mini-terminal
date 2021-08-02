@@ -1,6 +1,0 @@
-{
- "name": "icmt",
-  "repo": "git@github.com:matthewhammer/ic-mini-terminal",
-  "version": "v0.0.1",
-  "dependencies": ["MirrorGarden", "adapton", "base", "redraw", "sequence"]
-}

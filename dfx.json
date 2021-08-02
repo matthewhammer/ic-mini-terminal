@@ -1,8 +1,8 @@
 
 {
   "canisters": {
-    "MirrorGarden": {
-      "main": ".vessel/MirrorGarden/master/service/MirrorGarden.mo"
+    "Example": {
+      "main": "example/Main.mo"
     }
   },
   "defaults": {

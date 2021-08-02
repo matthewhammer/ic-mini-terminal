@@ -40,7 +40,7 @@ ron = "*"
 
 [lib]
 name = "icmt"
-path = "src/lib/mod.rs"
+path = "lib/mod.rs"
 test = true            # Is tested by default.
 doctest = true         # Documentation examples are tested by default.
 bench = true           # Is benchmarked by default.
@@ -54,4 +54,4 @@ required-features = [] # Features required to build this target (N/A for lib).
 
 [[bin]]
 name = "ic-mt"
-path = "src/bin/ic-mt.rs"
+path = "bin/ic-mt.rs"

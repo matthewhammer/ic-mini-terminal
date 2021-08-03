@@ -2,7 +2,7 @@ extern crate futures;
 extern crate garcon;
 extern crate ic_agent;
 extern crate ic_types;
-extern crate icmt;
+extern crate icmt_sdl2;
 extern crate num_traits;
 extern crate sdl2;
 extern crate serde;
@@ -34,7 +34,7 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tokio::task;
 
-use icmt::{
+use icmt_sdl2::{
     cli::*,
     draw::*,
     error::*,

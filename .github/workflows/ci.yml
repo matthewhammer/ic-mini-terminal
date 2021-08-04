@@ -21,7 +21,7 @@ jobs:
     - name: Build_and_deploy
       run: |
         dfx start --background
-        dfx deploy --no-wallet Counter
+        dfx deploy --no-wallet --all
     - name: Tests
       run: echo "to do"
     - name: Docs_build

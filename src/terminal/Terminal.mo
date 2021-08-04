@@ -7,7 +7,7 @@ module {
   public type Dim = Types.Dim;
   public type Elm = Types.Graphics.Elm;
   public type EventInfo = Types.Event.EventInfo;
-  
+
   /// Simple "core behavior" of an icmt-based service.
   public type Core = object {
     clone : () -> Core;
@@ -24,13 +24,18 @@ module {
     update : EventInfo -> ();
   };
 
+  public type Terminal = object {
+    view : (Types.Dim, [EventInfo]) -> ViewResult;
+    update : ([EventInfo], GfxReq) -> UpdateResult;
+  };
+
   public type GfxReq = Types.GraphicsRequest;
   public type ViewResult = Types.Graphics.Result;
   public type UpdateResult = [Types.Graphics.Result];
 
   /// Construct Basic terminal service from a service Core.
   public class Basic(initCore : Core) {
-    
+
     var core = initCore;
 
     public func view(dim : Types.Dim, events : [EventInfo]) : ViewResult {
@@ -48,5 +53,5 @@ module {
       []
     };
   };
-  
+
 }

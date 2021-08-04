@@ -1,7 +1,7 @@
-import Types "../src/Types";
-import Render "../src/Render";
-import Mono5x5 "../src/glyph/Mono5x5";
-import Term "../src/terminal/Terminal";
+import Types "../../src/Types";
+import Render "../../src/Render";
+import Mono5x5 "../../src/glyph/Mono5x5";
+import Term "../../src/terminal/Terminal";
 import Nat "mo:base/Nat";
 
 actor {
@@ -18,7 +18,7 @@ actor {
     };
     public func txtAtts(zm : Nat) : Render.BitMapTextAtts = {
       zoom = zm;
-      fgFill = #closed((100, 100, 100));
+      fgFill = #closed((255, 255, 255));
       bgFill = #none;
       flow = horzTextFlow(zm);
     };
@@ -33,10 +33,12 @@ actor {
 
     public func draw (d: Dim) : Types.Graphics.Elm {
       let r = Render.Render();
-      let atts = Style.txtAtts(d.width / 256 + 1);
+      let text = "count = " # Nat.toText(count);
+      let zoom = d.width / (text.size() * 6);
+      let atts = Style.txtAtts(if (zoom < 1) { 1 } else { zoom });
       let cr = Render.CharRender(r, Mono5x5.bitmapOfChar, atts);
       let tr = Render.TextRender(cr);
-      tr.textAtts("count = " # Nat.toText(count), atts);
+      tr.textAtts(text, atts);
       r.getElm()
     };
 

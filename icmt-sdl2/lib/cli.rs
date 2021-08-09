@@ -3,7 +3,7 @@
 use clap::Shell;
 use structopt::StructOpt;
 
-use ic_agent::{Agent};
+use ic_agent::Agent;
 use ic_types::Principal;
 
 use std::path::PathBuf;
@@ -75,7 +75,6 @@ pub struct ConnectCtx {
     pub canister_id: Principal,
     pub data_path: PathBuf,
 }
-
 
 /// Connection configuration
 #[derive(Debug, Clone)]

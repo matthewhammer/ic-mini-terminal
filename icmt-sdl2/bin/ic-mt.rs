@@ -15,7 +15,7 @@ extern crate structopt;
 use structopt::StructOpt;
 
 use candid::Decode;
-use ic_agent::{Agent};
+use ic_agent::Agent;
 use ic_types::Principal;
 
 use candid::Nat;
@@ -26,7 +26,7 @@ use sdl2::keyboard::Keycode;
 use sdl2::render::{Canvas, RenderTarget};
 use sdl2::surface::Surface;
 use std::fs;
-use std::fs::{OpenOptions};
+use std::fs::OpenOptions;
 use std::io;
 use std::io::Write;
 use std::path::PathBuf;
@@ -60,22 +60,19 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 async fn create_agent(url: &str, pem_file: &Option<String>) -> IcmtResult<Agent> {
     use ring::signature::Ed25519KeyPair;
-    let keypair =
-        if let Some(pem_path) = pem_file {
-            let path = resolve_path(&pem_path)?;
-            let bytes =
-                std::fs::read(&path)?;
-            info!("Parsing pem file {:?}", path);
-            let pem = pem::parse(&bytes)?;
-            info!("Successfully parsed pem file {:?}", path);
-            pem.contents
-        } else {
-            let rng = ring::rand::SystemRandom::new();
-            Ed25519KeyPair::generate_pkcs8(&rng)?.as_ref().to_vec()
-        };
-    let identity = ic_agent::identity::BasicIdentity::from_key_pair(
-        Ed25519KeyPair::from_pkcs8(&keypair)?,
-    );
+    let keypair = if let Some(pem_path) = pem_file {
+        let path = resolve_path(&pem_path)?;
+        let bytes = std::fs::read(&path)?;
+        info!("Parsing pem file {:?}", path);
+        let pem = pem::parse(&bytes)?;
+        info!("Successfully parsed pem file {:?}", path);
+        pem.contents
+    } else {
+        let rng = ring::rand::SystemRandom::new();
+        Ed25519KeyPair::generate_pkcs8(&rng)?.as_ref().to_vec()
+    };
+    let identity =
+        ic_agent::identity::BasicIdentity::from_key_pair(Ed25519KeyPair::from_pkcs8(&keypair)?);
     let agent = Agent::builder()
         .with_url(url)
         .with_identity(identity)
@@ -775,7 +772,7 @@ async fn main() -> IcmtResult<()> {
                 replica_url,
                 cli_opt,
                 user_kind,
-                pem_file:None,
+                pem_file: None,
             };
             run(cfg).await?;
         }
@@ -787,11 +784,7 @@ async fn main() -> IcmtResult<()> {
             let user_info: UserInfoCli = {
                 (
                     format!("Guest-{}", Local::now().to_rfc3339()),
-                    (
-                        Nat::from(255),
-                        Nat::from(255),
-                        Nat::from(255),
-                    ),
+                    (Nat::from(255), Nat::from(255), Nat::from(255)),
                 )
             };
             let user_kind = UserKind::Local(user_info);

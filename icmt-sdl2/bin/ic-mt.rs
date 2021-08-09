@@ -15,7 +15,7 @@ extern crate structopt;
 use structopt::StructOpt;
 
 use candid::Decode;
-use ic_agent::Agent;
+use ic_agent::{Agent};
 use ic_types::Principal;
 
 use candid::Nat;
@@ -26,7 +26,7 @@ use sdl2::keyboard::Keycode;
 use sdl2::render::{Canvas, RenderTarget};
 use sdl2::surface::Surface;
 use std::fs;
-use std::fs::{File, OpenOptions};
+use std::fs::{OpenOptions};
 use std::io;
 use std::io::Write;
 use std::path::PathBuf;
@@ -58,19 +58,27 @@ fn init_log(level_filter: log::LevelFilter) {
 const RETRY_PAUSE: Duration = Duration::from_millis(100);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
-async fn create_agent(url: &str) -> IcmtResult<Agent> {
-    //use ring::signature::Ed25519KeyPair;
-    use ring::rand::SystemRandom;
-    info!("creating agent.");
-
-    // to do -- read identity from a file
-    let rng = SystemRandom::new();
-    let pkcs8_bytes = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng)?;
-    let key_pair = ring::signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
-    let ident = ic_agent::identity::BasicIdentity::from_key_pair(key_pair);
+async fn create_agent(url: &str, pem_file: &Option<String>) -> IcmtResult<Agent> {
+    use ring::signature::Ed25519KeyPair;
+    let keypair =
+        if let Some(pem_path) = pem_file {
+            let path = resolve_path(&pem_path)?;
+            let bytes =
+                std::fs::read(&path)?;
+            info!("Parsing pem file {:?}", path);
+            let pem = pem::parse(&bytes)?;
+            info!("Successfully parsed pem file {:?}", path);
+            pem.contents
+        } else {
+            let rng = ring::rand::SystemRandom::new();
+            Ed25519KeyPair::generate_pkcs8(&rng)?.as_ref().to_vec()
+        };
+    let identity = ic_agent::identity::BasicIdentity::from_key_pair(
+        Ed25519KeyPair::from_pkcs8(&keypair)?,
+    );
     let agent = Agent::builder()
         .with_url(url)
-        .with_identity(ident)
+        .with_identity(identity)
         .build()?;
     info!("built agent.");
     if true {
@@ -154,7 +162,7 @@ async fn do_view_task(
 ) -> IcmtResult<()> {
     /* Create our own agent here since we cannot Send it here from the main thread. */
     let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
-    let agent = create_agent(&cfg.replica_url).await?;
+    let agent = create_agent(&cfg.replica_url, &cfg.pem_file).await?;
     let ctx = ConnectCtx {
         cfg: cfg.clone(),
         canister_id,
@@ -184,7 +192,7 @@ async fn do_update_task(
 ) -> IcmtResult<()> {
     /* Create our own agent here since we cannot Send it here from the main thread. */
     let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
-    let agent = create_agent(&cfg.replica_url).await?;
+    let agent = create_agent(&cfg.replica_url, &cfg.pem_file).await?;
     let ctx = ConnectCtx {
         cfg,
         canister_id,
@@ -708,7 +716,7 @@ async fn run(cfg: ConnectCfg) -> IcmtResult<()> {
         std::fs::create_dir_all(&cfg.cli_opt.capture_output_path)?;
     };
     let canister_id = Principal::from_text(cfg.canister_id.clone()).unwrap();
-    let agent = create_agent(&cfg.replica_url).await?;
+    let agent = create_agent(&cfg.replica_url, &cfg.pem_file).await?;
 
     info!("Connecting to IC canister: {}", canister_id);
     let ctx = ConnectCtx {
@@ -721,6 +729,16 @@ async fn run(cfg: ConnectCfg) -> IcmtResult<()> {
 
     local_event_loop(ctx).await?;
     Ok(())
+}
+
+pub fn resolve_path(file: &str) -> IcmtResult<PathBuf> {
+    let file = PathBuf::from(shellexpand::tilde(file).into_owned());
+    if file.is_absolute() {
+        Ok(file)
+    } else {
+        let base = std::env::current_dir()?;
+        Ok(base.join(file))
+    }
 }
 
 #[tokio::main]
@@ -757,22 +775,22 @@ async fn main() -> IcmtResult<()> {
                 replica_url,
                 cli_opt,
                 user_kind,
+                pem_file:None,
             };
             run(cfg).await?;
         }
         CliCommand::Connect {
             canister_id,
             replica_url,
-            user_info_text,
+            pem_file,
         } => {
-            let raw_args: (String, (u8, u8, u8)) = ron::de::from_str(&user_info_text).unwrap();
             let user_info: UserInfoCli = {
                 (
-                    raw_args.0,
+                    format!("Guest-{}", Local::now().to_rfc3339()),
                     (
-                        Nat::from((raw_args.1).0),
-                        Nat::from((raw_args.1).1),
-                        Nat::from((raw_args.1).2),
+                        Nat::from(255),
+                        Nat::from(255),
+                        Nat::from(255),
                     ),
                 )
             };
@@ -782,6 +800,7 @@ async fn main() -> IcmtResult<()> {
                 replica_url,
                 cli_opt,
                 user_kind,
+                pem_file,
             };
             run(cfg).await?;
         }

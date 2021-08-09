@@ -6,7 +6,7 @@ use log::error;
 pub type IcmtResult<X> = Result<X, IcmtError>;
 
 /// Errors from the mini terminal, or its subcomponents.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum IcmtError {
     Candid(std::sync::Arc<candid::Error>),
     Agent(), /* Clone => Agent(ic_agent::AgentError) */
@@ -15,7 +15,15 @@ pub enum IcmtError {
     RingKeyRejected(ring::error::KeyRejected),
     RingUnspecified(ring::error::Unspecified),
     FromHexError(hex::FromHexError),
+    PemError(pem::PemError),
 }
+
+impl std::convert::From<pem::PemError> for IcmtError {
+    fn from(pe: pem::PemError) -> Self {
+        IcmtError::PemError(pe)
+    }
+}
+
 impl std::convert::From<hex::FromHexError> for IcmtError {
     fn from(fhe: hex::FromHexError) -> Self {
         IcmtError::FromHexError(fhe)

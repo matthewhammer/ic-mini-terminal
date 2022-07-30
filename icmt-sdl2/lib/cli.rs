@@ -51,9 +51,8 @@ pub enum CliCommand {
     Connect {
         replica_url: String,
         canister_id: String,
-        /// Initialization arguments, as a Candid textual value (default is empty tuple).
-        #[structopt(short = "i", long = "user")]
-        user_info_text: String,
+        #[structopt(short = "p", long = "pem-file")]
+        pem_file: Option<String>,
     },
     #[structopt(
         name = "replay",
@@ -64,7 +63,7 @@ pub enum CliCommand {
         canister_id: String,
         events_file_path: String,
         /// Frame size, in number of events, for the replay's update requests.
-        #[structopt(short = "s", long = "frame_size", default_value = "6")]
+        #[structopt(short = "s", long = "frame-size", default_value = "6")]
         frame_size: usize,
     },
 }
@@ -84,4 +83,5 @@ pub struct ConnectCfg {
     pub canister_id: String,
     pub replica_url: String,
     pub user_kind: crate::types::UserKind,
+    pub pem_file: Option<String>,
 }

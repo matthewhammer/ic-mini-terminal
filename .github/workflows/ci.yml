@@ -5,7 +5,7 @@ on:
       - master
   pull_request:
 jobs:
-  Motoko_icmt_package:
+  Motoko_icmt_package_all_examples:
     name: Motoko icmt package
     runs-on: ubuntu-latest
     env:
@@ -18,10 +18,10 @@ jobs:
         echo "/home/runner/bin" >> $GITHUB_PATH
         dfx cache install
         ./scripts/vessel-install.sh
-    - name: Build_and_deploy
+    - name: Build_and_deploy_all_examples
       run: |
         dfx start --background
-        dfx deploy --no-wallet Counter
+        dfx deploy --no-wallet
     - name: Tests
       run: echo "to do"
     - name: Docs_build

@@ -2,7 +2,10 @@
 {
   "canisters": {
     "Counter": {
-      "main": "examples/Counter.mo"
+      "main": "examples/counter/Counter.mo"
+    },
+    "MazeGame": {
+      "main": "examples/maze-game/MazeGame.mo"
     }
   },
   "defaults": {

@@ -901,6 +901,7 @@ dependencies = [
  "log",
  "num-bigint 0.2.6",
  "num-traits 0.2.14",
+ "pem",
  "ring",
  "ron",
  "sdl2",
@@ -908,6 +909,7 @@ dependencies = [
  "serde_bytes",
  "serde_cbor 0.9.0",
  "serde_json",
+ "shellexpand",
  "structopt",
  "tokio",
 ]
@@ -2003,6 +2005,15 @@ dependencies = [
  "cpufeatures",
  "digest",
  "opaque-debug",
+]
+
+[[package]]
+name = "shellexpand"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83bdb7831b2d85ddf4a7b148aa19d0587eddbe8671a436b7bd1182eaad0f2829"
+dependencies = [
+ "dirs-next",
 ]
 
 [[package]]

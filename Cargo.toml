@@ -1,4 +1,6 @@
 [workspace]
 members = [
+    "icmt-core",
+    "icmt-web",
     "icmt-sdl2",
 ]
